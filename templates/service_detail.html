@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Услуга - ООО "Дикоиль плюс"</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: white;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #5B9BD5;
+            text-decoration: none;
+            margin-bottom: 2rem;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .back-link:hover {
+            color: #6B9FA8;
+        }
+
+        .service-detail-card {
+            background: #f5f7fa;
+            border-radius: 20px;
+            padding: 3rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 2rem;
+        }
+
+        .service-title-section {
+            flex: 1;
+        }
+
+        .service-category {
+            display: inline-block;
+            background: #6B9FA8;
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        .service-title {
+            font-size: 2.5rem;
+            color: #2c3e50;
+            margin-bottom: 1rem;
+        }
+
+        .service-price {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #5B9BD5;
+            text-align: right;
+        }
+
+        .service-description {
+            font-size: 1.1rem;
+            color: #7f8c8d;
+            line-height: 1.8;
+            margin-bottom: 2rem;
+        }
+
+        .service-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .info-item {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            border-left: 4px solid #5B9BD5;
+        }
+
+        .info-label {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .info-value {
+            color: #2c3e50;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            background: #5B9BD5;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(91, 155, 213, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6B9FA8;
+        }
+
+        .features-section {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+        .features-section h3 {
+            font-size: 1.8rem;
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+        }
+
+        .features-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: start;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f5f7fa;
+            border-radius: 10px;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+            color: #5B9BD5;
+            flex-shrink: 0;
+        }
+
+        .feature-text {
+            color: #2c3e50;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            font-size: 1.2rem;
+            color: #7f8c8d;
+        }
+
+        .footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 4rem;
+        }
+    </style>
+</head>
+<body>
+    {% include "header.html" %}
+
+    <div class="container">
+        <a href="/services" class="back-link">← Вернуться к услугам</a>
+        
+        <div id="serviceContent" class="loading">Загрузка...</div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2026 ООО "Дикоиль плюс". Все права защищены.</p>
+    </footer>
+
+    <script>
+        const serviceId = window.location.pathname.split('/').pop();
+        const serviceDetails = {
+            1: {
+                name: "Металлокерамическая коронка",
+                description: "Прочная и долговечная коронка, сочетающая металлический каркас с керамическим покрытием. Идеально подходит для восстановления жевательных зубов. Металлическая основа обеспечивает прочность, а керамическое покрытие — естественный внешний вид. Изготавливается с точной подгонкой под индивидуальные особенности пациента.",
+                features: [
+                    "Высокая прочность и долговечность",
+                    "Естественный внешний вид",
+                    "Биосовместимость материалов",
+                    "Точная подгонка под прикус",
+                    "Доступная цена"
+                ]
+            },
+            2: {
+                name: "Циркониевая коронка",
+                description: "Современное решение для восстановления зубов с использованием диоксида циркония. Обладает исключительной прочностью и эстетикой. Не вызывает аллергических реакций, не темнеет со временем. Идеальный выбор для передних зубов благодаря естественной прозрачности и цветопередаче. Изготавливается методом CAD/CAM с высочайшей точностью.",
+                features: [
+                    "Максимальная эстетика",
+                    "Гипоаллергенность",
+                    "Не темнеет со временем",
+                    "Высокая точность изготовления",
+                    "Долгий срок службы"
+                ]
+            },
+            3: {
+                name: "Съемный протез полный",
+                description: "Полный съемный протез для восстановления всех зубов на одной челюсти. Изготавливается из высококачественной акриловой пластмассы с учетом анатомических особенностей. Обеспечивает комфортное ношение и восстановление жевательной функции. Протез точно прилегает к десне, равномерно распределяя нагрузку.",
+                features: [
+                    "Восстановление всех зубов",
+                    "Комфортное ношение",
+                    "Равномерное распределение нагрузки",
+                    "Индивидуальная подгонка",
+                    "Доступная стоимость"
+                ]
+            },
+            4: {
+                name: "Бюгельный протез",
+                description: "Частичный съемный протез с металлическим каркасом. Отличается компактностью и прочностью. Металлическая дуга обеспечивает надежную фиксацию и распределение нагрузки. Подходит для частичного отсутствия зубов. Более удобен в ношении по сравнению с полными съемными протезами благодаря меньшему объему базиса.",
+                features: [
+                    "Компактная конструкция",
+                    "Надежная фиксация",
+                    "Металлический каркас",
+                    "Удобство в использовании",
+                    "Долговечность"
+                ]
+            },
+            5: {
+                name: "Керамический винир",
+                description: "Тонкая керамическая накладка для эстетической реставрации передних зубов. Позволяет исправить форму, цвет и положение зубов с минимальной обработкой. Изготавливается из премиальной керамики E-max, которая обеспечивает естественную прозрачность и долговечность. Идеально подходит для создания идеальной улыбки.",
+                features: [
+                    "Минимальная обработка зуба",
+                    "Естественная прозрачность",
+                    "Коррекция формы и цвета",
+                    "Долговечность материала",
+                    "Высокая эстетика"
+                ]
+            },
+            6: {
+                name: "Вкладка культевая",
+                description: "Литая культевая вкладка из кобальт-хромового сплава для восстановления сильно разрушенных зубов под коронку. Обеспечивает надежную опору для коронки и равномерное распределение нагрузки. Изготавливается методом литья с высокой точностью. Восстанавливает анатомическую форму зуба и обеспечивает долговечность конструкции.",
+                features: [
+                    "Надежная опора для коронки",
+                    "Высокая прочность",
+                    "Точное литье",
+                    "Восстановление формы зуба",
+                    "Долговечность"
+                ]
+            },
+            7: {
+                name: "Временная коронка",
+                description: "Временная пластмассовая коронка для защиты обработанного зуба на период изготовления постоянной конструкции. Обеспечивает защиту от внешних воздействий, поддерживает эстетику и функцию зуба. Изготавливается быстро, позволяет пациенту комфортно чувствовать себя в период ожидания постоянной коронки.",
+                features: [
+                    "Быстрое изготовление",
+                    "Защита зуба",
+                    "Поддержание эстетики",
+                    "Комфортное ношение",
+                    "Доступная цена"
+                ]
+            }
+        };
+
+        async function loadService() {
+            try {
+                const response = await fetch(`/api/services`);
+                const services = await response.json();
+                const service = services.find(s => s.id === parseInt(serviceId));
+                
+                if (!service) {
+                    document.getElementById('serviceContent').innerHTML = '<div class="loading">Услуга не найдена</div>';
+                    return;
+                }
+
+                const detail = serviceDetails[service.id] || {
+                    description: service.description,
+                    features: []
+                };
+
+                renderService(service, detail);
+            } catch (error) {
+                document.getElementById('serviceContent').innerHTML = '<div class="loading">Ошибка загрузки</div>';
+            }
+        }
+
+        function renderService(service, detail) {
+            const content = `
+                <div class="service-detail-card">
+                    <div class="service-header">
+                        <div class="service-title-section">
+                            <span class="service-category">${service.category}</span>
+                            <h1 class="service-title">${service.name}</h1>
+                        </div>
+                        <div class="service-price">${service.base_price} BYN</div>
+                    </div>
+                    
+                    <p class="service-description">${detail.description}</p>
+                    
+                    <div class="service-info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Материал</div>
+                            <div class="info-value">${service.material}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Срок изготовления</div>
+                            <div class="info-value">${service.production_time_days} дней</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Категория</div>
+                            <div class="info-value">${service.category}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="action-buttons">
+                        <button class="btn" onclick="addToCalculator(${service.id})">Добавить в расчет</button>
+                        <a href="/services" class="btn btn-secondary">Все услуги</a>
+                    </div>
+                </div>
+                
+                ${detail.features.length > 0 ? `
+                <div class="features-section">
+                    <h3>Преимущества</h3>
+                    <div class="features-list">
+                        ${detail.features.map(feature => `
+                            <div class="feature-item">
+                                <span class="feature-icon">✓</span>
+                                <span class="feature-text">${feature}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            `;
+            
+            document.getElementById('serviceContent').innerHTML = content;
+        }
+
+        function addToCalculator(serviceId) {
+            window.location.href = `/services#calc-${serviceId}`;
+        }
+
+        loadService();
+    </script>
+</body>
+</html>
+

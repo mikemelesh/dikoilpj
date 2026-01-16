@@ -1,0 +1,248 @@
+<style>
+    .header {
+        background: #5B9BD5;
+        color: white;
+        padding: 1rem 0;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+    }
+
+    .nav-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 2rem;
+    }
+
+    .logo {
+        font-size: 1.5rem;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        text-decoration: none;
+        color: white;
+        transition: transform 0.3s;
+    }
+
+    .logo:hover {
+        transform: scale(1.05);
+    }
+
+    .logo-icon {
+        font-size: 2rem;
+    }
+
+    .nav-menu {
+        display: flex;
+        gap: 2rem;
+        list-style: none;
+        align-items: center;
+        margin: 0;
+        padding: 0;
+    }
+
+    .nav-menu li {
+        margin: 0;
+    }
+
+    .nav-menu a {
+        color: white;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        position: relative;
+        display: inline-block;
+    }
+
+    .nav-menu a::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        width: 0;
+        height: 2px;
+        background: white;
+        transition: all 0.3s ease;
+        transform: translateX(-50%);
+    }
+
+    .nav-menu a:hover {
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateY(-2px);
+    }
+
+    .nav-menu a:hover::after {
+        width: 80%;
+    }
+
+    .nav-menu a.active {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    .nav-menu a.active::after {
+        width: 80%;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        background: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        color: #5B9BD5;
+    }
+
+    .logout-btn {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .logout-btn:hover {
+        background: rgba(255,255,255,0.3);
+        transform: translateY(-2px);
+    }
+
+    @media (max-width: 768px) {
+        .nav-container {
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .nav-menu {
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .nav-menu a {
+            font-size: 0.9rem;
+            padding: 0.4rem 0.8rem;
+        }
+
+        .user-info {
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+    }
+</style>
+
+<header class="header">
+    <nav class="nav-container">
+        <a href="/" class="logo">
+            <span class="logo-icon">🦷</span>
+            <span>Дикоиль плюс</span>
+        </a>
+        <div style="display: flex; align-items: center; gap: 2rem;">
+            <ul class="nav-menu">
+                <li><a href="/" {% if request.url.path == "/" %}class="active"{% endif %}>Главная</a></li>
+                <li><a href="/services" {% if "/services" in request.url.path %}class="active"{% endif %}>Услуги</a></li>
+                <li><a href="/cabinet" {% if request.url.path == "/cabinet" %}class="active"{% endif %}>Личный кабинет</a></li>
+                <li id="loginNavItem"><a href="/login" {% if request.url.path == "/login" %}class="active"{% endif %}>Вход</a></li>
+            </ul>
+            <div class="user-info" id="userInfoSection" style="display: none;">
+                <div class="user-avatar">👤</div>
+                <span id="headerUserName" style="color: white; font-weight: 600;"></span>
+                <button class="logout-btn" onclick="logout()">Выйти</button>
+            </div>
+        </div>
+    </nav>
+</header>
+
+<script>
+    (function() {
+        const token = localStorage.getItem('token');
+        const role = localStorage.getItem('role');
+        const loginNavItem = document.getElementById('loginNavItem');
+        const userInfoSection = document.getElementById('userInfoSection');
+        
+        if (token) {
+            // User is logged in
+            if (loginNavItem) loginNavItem.style.display = 'none';
+            if (userInfoSection) {
+                userInfoSection.style.display = 'flex';
+                // Try to get user name from API or use role
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const userEmail = payload.sub;
+                    
+                    fetch('/api/users', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(res => res.ok ? res.json() : null)
+                    .then(users => {
+                        if (users && users.length > 0) {
+                            const currentUser = users.find(u => u.email === userEmail) || users[0];
+                            const userNameEl = document.getElementById('headerUserName');
+                            const cabinetUserNameEl = document.getElementById('userName');
+                            if (currentUser) {
+                                if (userNameEl) {
+                                    userNameEl.textContent = currentUser.full_name || 'Пользователь';
+                                }
+                                if (cabinetUserNameEl) {
+                                    cabinetUserNameEl.textContent = currentUser.full_name || 'Пользователь';
+                                }
+                            }
+                        }
+                    })
+                    .catch(() => {
+                        const userNameEl = document.getElementById('headerUserName');
+                        const cabinetUserNameEl = document.getElementById('userName');
+                        const roleNames = {
+                            'admin': 'Администратор',
+                            'manager': 'Менеджер',
+                            'technician': 'Технолог',
+                            'legal_client': 'Клиент',
+                            'individual_client': 'Клиент'
+                        };
+                        const roleName = roleNames[role] || 'Пользователь';
+                        if (userNameEl) userNameEl.textContent = roleName;
+                        if (cabinetUserNameEl) cabinetUserNameEl.textContent = roleName;
+                    });
+                } catch (e) {
+                    console.error('Error parsing token:', e);
+                }
+            }
+        } else {
+            // User is not logged in
+            if (loginNavItem) loginNavItem.style.display = 'list-item';
+            if (userInfoSection) userInfoSection.style.display = 'none';
+        }
+        
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('role');
+            window.location.href = '/login';
+        }
+        
+        window.logout = logout;
+    })();
+</script>
+

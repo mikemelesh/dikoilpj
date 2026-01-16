@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ООО "Дикоиль плюс" - Зуботехническая лаборатория</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: white;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+
+
+        .hero {
+            background: #6B9FA8;
+            color: white;
+            padding: 5rem 2rem;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            max-width: 800px;
+            margin: 0 auto 2rem;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            background: #5B9BD5;
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: bold;
+            transition: transform 0.3s, box-shadow 0.3s;
+            box-shadow: 0 4px 15px rgba(91, 155, 213, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            color: #2c3e50;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .card {
+            background: #f5f7fa;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.15);
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #5B9BD5;
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+
+        .card p {
+            color: #7f8c8d;
+        }
+
+        .features {
+            background: #f5f7fa;
+            border-radius: 20px;
+            padding: 3rem;
+            margin-bottom: 4rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .feature-item {
+            display: flex;
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .feature-icon {
+            font-size: 2rem;
+            color: #5B9BD5;
+            flex-shrink: 0;
+        }
+
+        .about {
+            background: #6B9FA8;
+            color: white;
+            padding: 4rem 2rem;
+            border-radius: 20px;
+            margin-bottom: 4rem;
+        }
+
+        .about h2 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .about-content {
+            max-width: 800px;
+            margin: 0 auto;
+            font-size: 1.1rem;
+            line-height: 1.8;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .contact {
+            background: #f5f7fa;
+            padding: 3rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .contact-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .contact-icon {
+            font-size: 2rem;
+            color: #5B9BD5;
+        }
+
+        .footer {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 4rem;
+        }
+    </style>
+</head>
+<body>
+    {% include "header.html" %}
+
+    <section class="hero">
+        <h1>Зуботехническая лаборатория в Беларуси</h1>
+        <p>Профессиональное изготовление зубных протезов, коронок и ортодонтических конструкций с использованием современных технологий</p>
+        <a href="/services" class="btn">Посмотреть услуги</a>
+    </section>
+
+    <div class="container">
+        <h2 class="section-title">Наши услуги</h2>
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-icon">👑</div>
+                <h3>Коронки</h3>
+                <p>Металлокерамические, циркониевые и керамические коронки высочайшего качества. Индивидуальный подбор цвета и формы.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">🦷</div>
+                <h3>Протезы</h3>
+                <p>Съемные и несъемные протезы различной сложности. Бюгельные конструкции с надежной фиксацией.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">✨</div>
+                <h3>Виниры</h3>
+                <p>Керамические виниры для создания идеальной улыбки. Минимальная обработка зубов.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">🔧</div>
+                <h3>Вкладки</h3>
+                <p>Культевые вкладки под коронки. Высокая точность изготовления на современном оборудовании.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">⚡</div>
+                <h3>Срочное изготовление</h3>
+                <p>Возможность ускоренного производства временных конструкций в течение 1-2 дней.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">💎</div>
+                <h3>Премиум материалы</h3>
+                <p>Работаем только с сертифицированными материалами ведущих мировых производителей.</p>
+            </div>
+        </div>
+
+        <div class="features">
+            <h2 class="section-title">Почему выбирают нас</h2>
+            <div class="features-grid">
+                <div class="feature-item">
+                    <div class="feature-icon">✓</div>
+                    <div>
+                        <h4>Высокое качество</h4>
+                        <p>Строгий контроль на всех этапах производства</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">✓</div>
+                    <div>
+                        <h4>Современное оборудование</h4>
+                        <p>Используем новейшие технологии CAD/CAM</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">✓</div>
+                    <div>
+                        <h4>Опытные специалисты</h4>
+                        <p>Команда профессионалов с многолетним стажем</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">✓</div>
+                    <div>
+                        <h4>Соблюдение сроков</h4>
+                        <p>Гарантируем выполнение заказов в срок</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">✓</div>
+                    <div>
+                        <h4>Гарантия качества</h4>
+                        <p>Предоставляем гарантию на все виды работ</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">✓</div>
+                    <div>
+                        <h4>Удобная доставка</h4>
+                        <p>Доставка готовых изделий по всей Беларуси</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="about">
+            <h2>О компании</h2>
+            <div class="about-content">
+                <p>ООО "Дикоиль плюс" - современная зуботехническая лаборатория, специализирующаяся на производстве высококачественных зубных протезов и ортодонтических конструкций. Мы работаем с ведущими стоматологическими клиниками Беларуси, обеспечивая их продукцией премиум-класса.</p>
+                <p style="margin-top: 1rem;">Наша миссия - делать улыбки людей красивыми и здоровыми, используя передовые технологии и лучшие материалы. Каждое изделие создается с максимальным вниманием к деталям и индивидуальным особенностям пациента.</p>
+            </div>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-number">15+</span>
+                    <span class="stat-label">лет на рынке</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">50+</span>
+                    <span class="stat-label">клиник-партнеров</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">10000+</span>
+                    <span class="stat-label">выполненных работ</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">98%</span>
+                    <span class="stat-label">довольных клиентов</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="contact">
+            <h2 class="section-title">Контакты</h2>
+            <div class="contact-grid">
+                <div class="contact-item">
+                    <div class="contact-icon">📞</div>
+                    <div>
+                        <h4>Телефон</h4>
+                        <p>+375 (29) 123-45-67</p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <div class="contact-icon">✉️</div>
+                    <div>
+                        <h4>Email</h4>
+                        <p>info@dikoilplus.by</p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <div class="contact-icon">📍</div>
+                    <div>
+                        <h4>Адрес</h4>
+                        <p>г. Минск, ул. Примерная, д. 123</p>
+                    </div>
+                </div>
+                <div class="contact-item">
+                    <div class="contact-icon">⏰</div>
+                    <div>
+                        <h4>Режим работы</h4>
+                        <p>Пн-Пт: 9:00-18:00</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2026 ООО "Дикоиль плюс". Все права защищены.</p>
+        <p style="margin-top: 0.5rem; opacity: 0.8;">Зуботехническая лаборатория в Республике Беларусь</p>
+    </footer>
+</body>
+</html>

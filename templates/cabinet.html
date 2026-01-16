@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Личный кабинет - ООО "Дикоиль плюс"</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: white;
+            color: #2c3e50;
+            line-height: 1.6;
+        }
+
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 2rem;
+        }
+
+        .sidebar {
+            background: #f5f7fa;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            color: #2c3e50;
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: #5B9BD5;
+            color: white;
+        }
+
+        .main-content {
+            background: #f5f7fa;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            min-height: 500px;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            margin-bottom: 2rem;
+            color: #2c3e50;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: #6B9FA8;
+            color: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+        }
+
+        .orders-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .orders-table th {
+            background: #6B9FA8;
+            color: white;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .orders-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .orders-table tr:hover {
+            background: rgba(91, 155, 213, 0.1);
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-menu a {
+            color: white;
+            text-decoration: none;
+            transition: opacity 0.3s;
+            font-weight: 500;
+        }
+
+        .nav-menu a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-approved {
+            background: #cfe2ff;
+            color: #084298;
+        }
+
+        .status-in_progress {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-ready {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-cancelled {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            background: #5B9BD5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: transform 0.3s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: #5B9BD5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #7f8c8d;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 3rem;
+            color: #7f8c8d;
+        }
+
+        .welcome-card {
+            background: #6B9FA8;
+            color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+        }
+
+        .welcome-card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        .cabinet-user-info {
+            position: fixed;
+            top: 1rem;
+            right: 2rem;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(91, 155, 213, 0.9);
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+        }
+
+        .cabinet-user-info span {
+            color: white;
+            font-weight: 600;
+        }
+    </style>
+</head>
+{% include "header.html" %}
+<body>
+    <div class="container">
+        <div class="dashboard">
+            <aside class="sidebar">
+                <ul class="sidebar-menu">
+                    <li><a href="#" class="active" onclick="showSection('dashboard')">📊 Главная</a></li>
+                    <li><a href="#" onclick="showSection('orders')">📦 Заказы</a></li>
+                    <li><a href="#" onclick="showSection('new-order')" id="newOrderLink">➕ Новый заказ</a></li>
+                    <li><a href="#" onclick="showSection('users')" id="usersLink" style="display: none;">👥 Пользователи</a></li>
+                    <li><a href="#" onclick="showSection('services')" id="servicesLink" style="display: none;">⚙️ Услуги</a></li>
+                    <li><a href="#" onclick="showSection('profile')">👤 Профиль</a></li>
+                </ul>
+            </aside>
+
+            <main class="main-content">
+                <!-- Dashboard Section -->
+                <div id="dashboard-section" class="section active">
+                    <div class="welcome-card">
+                        <h2 id="welcomeMessage">Добро пожаловать!</h2>
+                        <p>Управляйте заказами и следите за статусом работ</p>
+                    </div>
+
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-card">
+                            <span class="stat-number" id="totalOrders">0</span>
+                            <span class="stat-label">Всего заказов</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number" id="pendingOrders">0</span>
+                            <span class="stat-label">На рассмотрении</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number" id="activeOrders">0</span>
+                            <span class="stat-label">В работе</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-number" id="completedOrders">0</span>
+                            <span class="stat-label">Завершено</span>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-bottom: 1rem;">Последние заказы</h3>
+                    <div id="recentOrders"></div>
+                </div>
+
+                <!-- Orders Section -->
+                <div id="orders-section" class="section">
+                    <h1 class="page-title">Мои заказы</h1>
+                    <div id="ordersContent"></div>
+                </div>
+
+                <!-- New Order Section -->
+                <div id="new-order-section" class="section">
+                    <h1 class="page-title">Новый заказ</h1>
+                    <div id="newOrderContent">
+                        <div style="margin-bottom: 2rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Способ оплаты</label>
+                            <select id="paymentType" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 1rem;">
+                                <option value="cash">Наличные</option>
+                                <option value="cashless">Безналичный расчет</option>
+                                <option value="prepayment">Предоплата</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 2rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Примечания</label>
+                            <textarea id="orderNotes" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 1rem; min-height: 100px;" placeholder="Дополнительная информация к заказу..."></textarea>
+                        </div>
+                        <div id="servicesList" style="margin-bottom: 2rem;"></div>
+                        <div style="background: #6B9FA8; color: white; padding: 1.5rem; border-radius: 15px; margin-bottom: 2rem;">
+                            <h3 style="margin-bottom: 0.5rem;">Итого: <span id="orderTotal">0</span> BYN</h3>
+                        </div>
+                        <button class="btn" onclick="createOrder()" style="width: 100%;">Создать заказ</button>
+                    </div>
+                </div>
+
+                <!-- Users Section (Admin/Manager) -->
+                <div id="users-section" class="section">
+                    <h1 class="page-title">Пользователи</h1>
+                    <div id="usersContent"></div>
+                </div>
+
+                <!-- Services Section (Admin) -->
+                <div id="services-section" class="section">
+                    <h1 class="page-title">Управление услугами</h1>
+                    <p style="text-align: center; color: #7f8c8d; padding: 2rem;">
+                        Раздел в разработке
+                    </p>
+                </div>
+
+                <!-- Profile Section -->
+                <div id="profile-section" class="section">
+                    <h1 class="page-title">Мой профиль</h1>
+                    <div id="profileContent"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        const role = localStorage.getItem('role');
+
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        let currentUser = null;
+        let orders = [];
+
+        async function fetchWithAuth(url, options = {}) {
+            return fetch(url, {
+                ...options,
+                headers: {
+                    ...options.headers,
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+        }
+
+
+        async function loadOrders() {
+            try {
+                const response = await fetchWithAuth('/api/orders');
+                if (response.ok) {
+                    orders = await response.json();
+                    updateDashboard();
+                    renderOrders();
+                }
+            } catch (error) {
+                console.error('Error loading orders:', error);
+            }
+        }
+
+        async function loadUserData() {
+            try {
+                const response = await fetchWithAuth('/api/users');
+                if (response.ok) {
+                    const users = await response.json();
+                    const userEmail = JSON.parse(atob(token.split('.')[1])).sub;
+                    currentUser = users.find(u => u.email === userEmail) || users[0];
+                    if (currentUser) {
+                        document.getElementById('userName').textContent = currentUser.full_name || 'Пользователь';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+            }
+        }
+
+        function updateDashboard() {
+            document.getElementById('totalOrders').textContent = orders.length;
+            document.getElementById('pendingOrders').textContent = orders.filter(o => o.status === 'pending').length;
+            document.getElementById('activeOrders').textContent = orders.filter(o => ['approved', 'in_progress'].includes(o.status)).length;
+            document.getElementById('completedOrders').textContent = orders.filter(o => o.status === 'completed').length;
+
+            const recentOrders = orders.slice(0, 5);
+            document.getElementById('recentOrders').innerHTML = recentOrders.length > 0 
+                ? renderOrdersTable(recentOrders)
+                : '<div class="no-data">Заказов пока нет</div>';
+        }
+
+        function renderOrders() {
+            // Filter orders based on role
+            let filteredOrders = orders;
+            if (role === 'individual_client' || role === 'legal_client') {
+                // Clients see only approved orders
+                filteredOrders = orders.filter(o => o.status === 'approved' || o.status === 'in_progress' || o.status === 'ready' || o.status === 'completed');
+            } else if (role === 'manager' || role === 'admin') {
+                // Managers see all orders
+                filteredOrders = orders;
+            } else if (role === 'technician') {
+                // Technicians see assigned orders
+                filteredOrders = orders.filter(o => o.technician_id === currentUser?.id || o.status === 'approved' || o.status === 'in_progress');
+            }
+            
+            document.getElementById('ordersContent').innerHTML = filteredOrders.length > 0
+                ? renderOrdersTable(filteredOrders)
+                : '<div class="no-data">Заказов пока нет</div>';
+        }
+
+        function renderOrdersTable(ordersList) {
+            const isManager = ['admin', 'manager'].includes(role);
+            return `
+                <table class="orders-table">
+                    <thead>
+                        <tr>
+                            <th>№ Заказа</th>
+                            <th>Дата</th>
+                            <th>Клиент</th>
+                            <th>Сумма</th>
+                            <th>Статус</th>
+                            ${isManager ? '<th>Действия</th>' : '<th>Действия</th>'}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${ordersList.map(order => `
+                            <tr>
+                                <td><strong>${order.order_number}</strong></td>
+                                <td>${new Date(order.created_at).toLocaleDateString('ru-RU')}</td>
+                                <td>${order.client?.full_name || 'Не указан'}</td>
+                                <td><strong>${order.total_price.toFixed(2)} BYN</strong></td>
+                                <td><span class="status-badge status-${order.status}">${getStatusText(order.status)}</span></td>
+                                <td>
+                                    ${isManager && order.status === 'pending' ? `
+                                        <button class="btn" onclick="approveOrder(${order.id})" style="background: #6B9FA8; margin-right: 0.5rem;">Одобрить</button>
+                                        <button class="btn" onclick="rejectOrder(${order.id})" style="background: #f5576c;">Отклонить</button>
+                                    ` : ''}
+                                    ${isManager && order.status !== 'pending' ? `
+                                        <select onchange="changeOrderStatus(${order.id}, this.value)" style="padding: 0.5rem; border-radius: 8px; margin-right: 0.5rem;">
+                                            <option value="pending" ${order.status === 'pending' ? 'selected' : ''}>На рассмотрении</option>
+                                            <option value="approved" ${order.status === 'approved' ? 'selected' : ''}>Одобрен</option>
+                                            <option value="in_progress" ${order.status === 'in_progress' ? 'selected' : ''}>В работе</option>
+                                            <option value="ready" ${order.status === 'ready' ? 'selected' : ''}>Готов</option>
+                                            <option value="completed" ${order.status === 'completed' ? 'selected' : ''}>Завершен</option>
+                                            <option value="cancelled" ${order.status === 'cancelled' ? 'selected' : ''}>Отменен</option>
+                                        </select>
+                                    ` : ''}
+                                    <button class="btn" onclick="viewOrder(${order.id})">Подробнее</button>
+                                </td>
+                            </tr>
+                            ${order.rejection_message ? `
+                                <tr style="background: #ffe0e0;">
+                                    <td colspan="6" style="padding: 1rem; color: #721c24;">
+                                        <strong>Причина отклонения:</strong> ${order.rejection_message}
+                                    </td>
+                                </tr>
+                            ` : ''}
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                'pending': 'На рассмотрении',
+                'approved': 'Одобрен',
+                'in_progress': 'В работе',
+                'ready': 'Готов',
+                'completed': 'Завершен',
+                'cancelled': 'Отменен'
+            };
+            return statusMap[status] || status;
+        }
+
+        let services = [];
+        let selectedServices = new Map();
+
+        async function loadServices() {
+            try {
+                const response = await fetch('/api/services');
+                services = await response.json();
+                renderServicesList();
+            } catch (error) {
+                console.error('Error loading services:', error);
+            }
+        }
+
+        function renderServicesList() {
+            const container = document.getElementById('servicesList');
+            container.innerHTML = services.filter(s => s.is_active).map(service => `
+                <div style="display: flex; align-items: center; gap: 1rem; padding: 1rem; background: white; border-radius: 10px; margin-bottom: 1rem;">
+                    <input type="checkbox" id="service-${service.id}" onchange="toggleService(${service.id})">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: #2c3e50;">${service.name}</div>
+                        <div style="color: #7f8c8d; font-size: 0.9rem;">${service.base_price} BYN / шт</div>
+                    </div>
+                    <input type="number" id="qty-${service.id}" min="1" value="1" onchange="updateQuantity(${service.id}, this.value)" disabled style="width: 80px; padding: 0.5rem; border: 2px solid #e0e0e0; border-radius: 8px; text-align: center;">
+                </div>
+            `).join('');
+            updateOrderTotal();
+        }
+
+        function toggleService(serviceId) {
+            const checkbox = document.getElementById(`service-${serviceId}`);
+            const qtyInput = document.getElementById(`qty-${serviceId}`);
+            
+            if (checkbox.checked) {
+                qtyInput.disabled = false;
+                const service = services.find(s => s.id === serviceId);
+                selectedServices.set(serviceId, { service, quantity: 1 });
+            } else {
+                qtyInput.disabled = true;
+                selectedServices.delete(serviceId);
+            }
+            updateOrderTotal();
+        }
+
+        function updateQuantity(serviceId, quantity) {
+            const qty = parseInt(quantity) || 1;
+            const item = selectedServices.get(serviceId);
+            if (item) {
+                item.quantity = qty;
+                updateOrderTotal();
+            }
+        }
+
+        function updateOrderTotal() {
+            let total = 0;
+            selectedServices.forEach(({ service, quantity }) => {
+                total += service.base_price * quantity;
+            });
+            document.getElementById('orderTotal').textContent = total.toFixed(2);
+        }
+
+        async function createOrder() {
+            if (selectedServices.size === 0) {
+                alert('Выберите хотя бы одну услугу');
+                return;
+            }
+
+            const serviceIds = [];
+            const quantities = [];
+            selectedServices.forEach(({ service, quantity }) => {
+                serviceIds.push(service.id);
+                quantities.push(quantity);
+            });
+
+            try {
+                const response = await fetchWithAuth('/api/orders', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        service_ids: serviceIds,
+                        quantities: quantities,
+                        payment_type: document.getElementById('paymentType').value,
+                        notes: document.getElementById('orderNotes').value
+                    })
+                });
+
+                if (response.ok) {
+                    alert('Заказ успешно создан!');
+                    loadOrders();
+                    showSection('orders');
+                    // Reset form
+                    selectedServices.clear();
+                    document.getElementById('orderNotes').value = '';
+                    document.getElementById('paymentType').value = 'cash';
+                    renderServicesList();
+                } else {
+                    const data = await response.json();
+                    alert('Ошибка: ' + (data.detail || 'Не удалось создать заказ'));
+                }
+            } catch (error) {
+                alert('Ошибка соединения с сервером');
+            }
+        }
+
+        async function approveOrder(orderId) {
+            try {
+                const response = await fetchWithAuth(`/api/orders/${orderId}/approve`, {
+                    method: 'POST',
+                    body: JSON.stringify({ approved: true })
+                });
+
+                if (response.ok) {
+                    alert('Заказ одобрен');
+                    loadOrders();
+                } else {
+                    alert('Ошибка при одобрении заказа');
+                }
+            } catch (error) {
+                alert('Ошибка соединения с сервером');
+            }
+        }
+
+        async function rejectOrder(orderId) {
+            const message = prompt('Укажите причину отклонения заказа:');
+            if (!message) return;
+
+            try {
+                const response = await fetchWithAuth(`/api/orders/${orderId}/approve`, {
+                    method: 'POST',
+                    body: JSON.stringify({ approved: false, message: message })
+                });
+
+                if (response.ok) {
+                    alert('Заказ отклонен');
+                    loadOrders();
+                } else {
+                    alert('Ошибка при отклонении заказа');
+                }
+            } catch (error) {
+                alert('Ошибка соединения с сервером');
+            }
+        }
+
+        async function changeOrderStatus(orderId, status) {
+            try {
+                const response = await fetchWithAuth(`/api/orders/${orderId}/status?status=${status}`, {
+                    method: 'PATCH'
+                });
+
+                if (response.ok) {
+                    loadOrders();
+                } else {
+                    alert('Ошибка при изменении статуса');
+                }
+            } catch (error) {
+                alert('Ошибка соединения с сервером');
+            }
+        }
+
+        function viewOrder(orderId) {
+            const order = orders.find(o => o.id === orderId);
+            if (!order) return;
+            
+            let details = `Заказ: ${order.order_number}\n`;
+            details += `Дата: ${new Date(order.created_at).toLocaleDateString('ru-RU')}\n`;
+            details += `Сумма: ${order.total_price.toFixed(2)} BYN\n`;
+            details += `Статус: ${getStatusText(order.status)}\n`;
+            if (order.notes) details += `Примечания: ${order.notes}\n`;
+            if (order.rejection_message) details += `\nПричина отклонения: ${order.rejection_message}`;
+            
+            alert(details);
+        }
+
+        function showSection(sectionName) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.sidebar-menu a').forEach(a => a.classList.remove('active'));
+            
+            const section = document.getElementById(`${sectionName}-section`);
+            if (section) {
+                section.classList.add('active');
+            }
+            
+            event.target.classList.add('active');
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('role');
+            window.location.href = '/login';
+        }
+
+        // Настройка интерфейса в зависимости от роли
+        function setupRoleBasedUI() {
+            if (['admin', 'manager'].includes(role)) {
+                document.getElementById('usersLink').style.display = 'block';
+            }
+            if (role === 'admin') {
+                document.getElementById('servicesLink').style.display = 'block';
+            }
+            if (role === 'technician') {
+                document.getElementById('newOrderLink').style.display = 'none';
+            }
+
+            const roleNames = {
+                'admin': 'Администратор',
+                'manager': 'Менеджер',
+                'technician': 'Технолог',
+                'legal_client': 'Клиент (Юр. лицо)',
+                'individual_client': 'Клиент (Физ. лицо)'
+            };
+
+            document.getElementById('welcomeMessage').textContent = `Добро пожаловать, ${roleNames[role] || 'Пользователь'}!`;
+        }
+
+        // Инициализация
+        setupRoleBasedUI();
+        loadUserData();
+        loadOrders();
+        loadServices();
+    </script>
+</body>
+</html>
