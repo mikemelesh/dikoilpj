@@ -1,0 +1,5 @@
+Alembic migration environment for Dental Lab backend.
+
+Use `alembic revision --autogenerate -m "message"` to create migrations
+and `alembic upgrade head` to apply them.
+

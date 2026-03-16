@@ -1,0 +1,355 @@
+"""
+Роутеры для администрирования.
+"""
+import math
+import os
+import subprocess
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
+
+from ..config import settings
+from ..database import get_db
+from ..dependencies.auth import get_current_active_user, require_roles
+from ..models.logging import ActionLog
+from ..models.user import User, UserRole
+from ..schemas.secondary import (
+    ActionLogListResponse,
+    ActionLogResponse,
+    BackupResponse,
+    UserListResponse,
+    UserRoleUpdate,
+    UserStatusUpdate,
+    UserSummaryResponse,
+)
+from ..utils.security import log_action
+
+router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.get("/logs", response_model=ActionLogListResponse)
+async def get_action_logs(
+    user_id: Optional[str] = Query(None, description="Фильтр по пользователю"),
+    action_type: Optional[str] = Query(None, description="Фильтр по типу действия"),
+    date_from: Optional[datetime] = Query(None, description="Дата начала"),
+    date_to: Optional[datetime] = Query(None, description="Дата окончания"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """
+    Получить логи действий пользователей.
+    Доступно: admin.
+    """
+    query = db.query(ActionLog).options(
+        joinedload(ActionLog.user)
+    )
+    
+    # Фильтры
+    if user_id:
+        query = query.filter(ActionLog.user_id == user_id)
+    if action_type:
+        query = query.filter(ActionLog.action_type == action_type)
+    if date_from:
+        query = query.filter(ActionLog.created_at >= date_from)
+    if date_to:
+        query = query.filter(ActionLog.created_at <= date_to)
+    
+    total = query.count()
+    pages = math.ceil(total / limit) if total > 0 else 0
+    offset = (page - 1) * limit
+    logs = query.order_by(ActionLog.created_at.desc()).offset(offset).limit(limit).all()
+    
+    items = [
+        ActionLogResponse(
+            id=log.id,
+            user_id=str(log.user_id) if log.user_id else None,
+            user_email=log.user.email if log.user else None,
+            action_type=log.action_type,
+            entity_type=log.entity_type,
+            entity_id=log.entity_id,
+            description=log.description,
+            ip_address=log.ip_address,
+            created_at=log.created_at,
+        )
+        for log in logs
+    ]
+    
+    return ActionLogListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
+
+
+@router.get("/users", response_model=UserListResponse)
+async def get_all_users(
+    role: Optional[str] = Query(None, description="Фильтр по роли"),
+    is_active: Optional[bool] = Query(None, description="Фильтр по активности"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """
+    Получить список всех пользователей.
+    Доступно: admin.
+    """
+    query = db.query(User)
+    
+    # Фильтры
+    if role:
+        valid_roles = ["guest", "client", "technician", "manager", "admin"]
+        if role.lower() not in valid_roles:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Недопустимая роль. Допустимые: {', '.join(valid_roles)}"
+            )
+        query = query.filter(User.role == role.lower())
+    
+    if is_active is not None:
+        query = query.filter(User.is_active == is_active)
+    
+    total = query.count()
+    pages = math.ceil(total / limit) if total > 0 else 0
+    offset = (page - 1) * limit
+    users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
+    
+    items = [
+        UserSummaryResponse(
+            id=str(u.id),
+            email=u.email,
+            first_name=u.first_name,
+            last_name=u.last_name,
+            role=u.role,
+            is_active=u.is_active,
+            created_at=u.created_at,
+        )
+        for u in users
+    ]
+    
+    return UserListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
+
+
+@router.patch("/users/{user_id}/role", response_model=UserSummaryResponse)
+async def update_user_role(
+    user_id: str,
+    role_data: UserRoleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """
+    Изменить роль пользователя.
+    Доступно: admin.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь не найден"
+        )
+    
+    # Нельзя изменить роль админа (защита)
+    if user.role == UserRole.ADMIN and current_user.id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нельзя изменить роль другого администратора"
+        )
+    
+    # Валидация роли
+    valid_roles = ["guest", "client", "technician", "manager", "admin"]
+    new_role = role_data.role.lower()
+    if new_role not in valid_roles:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Недопустимая роль. Допустимые: {', '.join(valid_roles)}"
+        )
+    
+    old_role = user.role
+    user.role = new_role
+    
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    log_action(
+        db=db,
+        user_id=str(current_user.id),
+        action_type="update_user_role",
+        entity_type="user",
+        entity_id=user_id,
+        description=f"Роль пользователя {user.email} изменена: {old_role} → {new_role}",
+    )
+    
+    return UserSummaryResponse(
+        id=str(user.id),
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
+        is_active=user.is_active,
+        created_at=user.created_at,
+    )
+
+
+@router.patch("/users/{user_id}/status", response_model=UserSummaryResponse)
+async def update_user_status(
+    user_id: str,
+    status_data: UserStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """
+    Активировать/деактивировать пользователя.
+    Доступно: admin.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь не найден"
+        )
+    
+    # Нельзя деактивировать себя
+    if user.id == current_user.id and not status_data.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя деактивировать самого себя"
+        )
+    
+    # Нельзя деактивировать последнего админа
+    if user.role == UserRole.ADMIN and not status_data.is_active:
+        admin_count = db.query(func.count(User.id)).filter(
+            User.role == UserRole.ADMIN,
+            User.is_active == True,
+            User.id != user_id,
+        ).scalar()
+        if admin_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Нельзя деактивировать последнего администратора"
+            )
+    
+    old_status = user.is_active
+    user.is_active = status_data.is_active
+    
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    log_action(
+        db=db,
+        user_id=str(current_user.id),
+        action_type="update_user_status",
+        entity_type="user",
+        entity_id=user_id,
+        description=f"Статус пользователя {user.email} изменён: {'активен' if old_status else 'неактивен'} → {'активен' if status_data.is_active else 'неактивен'}",
+    )
+    
+    return UserSummaryResponse(
+        id=str(user.id),
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
+        is_active=user.is_active,
+        created_at=user.created_at,
+    )
+
+
+@router.post("/backup", response_model=BackupResponse)
+async def create_backup(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """
+    Создать дамп базы данных.
+    Доступно: admin.
+    """
+    # Создаём директорию для бэкапов
+    backup_dir = Path(settings.BASE_DIR.parent) / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Генерируем имя файла
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    filename = f"backup_{timestamp}.sql"
+    filepath = backup_dir / filename
+    
+    # Получаем параметры подключения из DSN
+    db_url = settings.SQLALCHEMY_DATABASE_URL
+    # postgresql+psycopg2://user:pass@host:port/dbname
+    try:
+        # Парсим DSN
+        parts = db_url.replace("postgresql+psycopg2://", "").split("@")
+        user_pass = parts[0].split(":")
+        user = user_pass[0]
+        password = user_pass[1] if len(user_pass) > 1 else ""
+        host_db = parts[1].split("/")
+        host_port = host_db[0].split(":")
+        host = host_port[0]
+        port = host_port[1] if len(host_port) > 1 else "5432"
+        dbname = host_db[1]
+        
+        # Формируем команду pg_dump
+        cmd = [
+            "pg_dump",
+            "-h", host,
+            "-p", port,
+            "-U", user,
+            "-d", dbname,
+            "-F", "p",  # plain text format
+            "-f", str(filepath),
+        ]
+        
+        # Выполняем команду
+        env = os.environ.copy()
+        env["PGPASSWORD"] = password
+        
+        result = subprocess.run(
+            cmd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        
+        if result.returncode != 0:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Ошибка pg_dump: {result.stderr}"
+            )
+        
+        # Получаем размер файла
+        file_size = filepath.stat().st_size
+        
+        log_action(
+            db=db,
+            user_id=str(current_user.id),
+            action_type="create_backup",
+            entity_type="backup",
+            entity_id=filename,
+            description=f"Создан бэкап БД: {filename} ({file_size} байт)",
+        )
+        
+        return BackupResponse(
+            filename=filename,
+            size=file_size,
+            created_at=datetime.utcnow(),
+        )
+        
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="pg_dump не найден. Установите PostgreSQL client tools."
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Таймаут создания бэкапа"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка создания бэкапа: {str(e)}"
+        )
