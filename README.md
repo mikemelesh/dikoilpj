@@ -176,28 +176,321 @@ python -m app.seed_data
 ## 📝 API Endpoints
 
 ### Auth
-- `POST /api/auth/register` — Регистрация
-- `POST /api/auth/login` — Вход
-- `POST /api/auth/refresh` — Обновление токена
-- `POST /api/auth/logout` — Выход
-- `GET /api/auth/me` — Текущий пользователь
+
+#### Регистрация пользователя
+```http
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "SecurePass123!",
+  "first_name": "Иван",
+  "last_name": "Иванов",
+  "phone": "+7 (999) 123-45-67",
+  "role": "client"  // client, technician, manager (опционально)
+}
+```
+
+**Ответ (200):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "bearer"
+}
+```
+
+#### Вход
+```http
+POST /api/auth/login
+Content-Type: application/x-www-form-urlencoded
+
+username=user@example.com&password=SecurePass123!
+```
+
+#### Обновление токена
+```http
+POST /api/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+#### Выход
+```http
+POST /api/auth/logout
+Authorization: Bearer {access_token}
+```
+
+#### Текущий пользователь
+```http
+GET /api/auth/me
+Authorization: Bearer {access_token}
+```
+
+---
 
 ### Orders
-- `GET /api/orders` — Список заказов
-- `POST /api/orders` — Создать заказ
-- `GET /api/orders/{id}` — Детали заказа
-- `PATCH /api/orders/{id}/status` — Сменить статус
-- `PATCH /api/orders/{id}/assign` — Назначить техника
+
+#### Список заказов
+```http
+GET /api/orders?status=new&priority=urgent&page=1&limit=20
+Authorization: Bearer {access_token}
+```
+
+**Параметры:**
+- `status` — фильтр по статусу (new, confirmed, in_progress, review, completed, cancelled, archived)
+- `priority` — фильтр по приоритету (normal, urgent, critical)
+- `page` — номер страницы (default: 1)
+- `limit` — количество на странице (default: 20, max: 100)
+
+#### Создать заказ
+```http
+POST /api/orders
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "service_id": 1,
+      "quantity": 2,
+      "specifications": {
+        "color": "A2",
+        "material": "Цирконий"
+      }
+    },
+    {
+      "service_id": 5,
+      "quantity": 1
+    }
+  ],
+  "notes": "Срочный заказ, дедлайн до пятницы",
+  "deadline": "2024-12-31",
+  "priority": "urgent"  // normal, urgent, critical
+}
+```
+
+**Ответ (201):**
+```json
+{
+  "id": "c45b64e7-551e-4557-9cf2-ac069f67924b",
+  "order_number": "ORD-20241218-A1B2",
+  "client_id": 1,
+  "client_name": "Иван Иванов",
+  "status": "new",
+  "priority": "urgent",
+  "total_price": 15000.00,
+  "discount_amount": 0,
+  "final_price": 15000.00,
+  "items": [
+    {
+      "service_id": 1,
+      "service_name": "Металлокерамическая коронка",
+      "quantity": 2,
+      "unit_price": 5000.00,
+      "total_price": 10000.00
+    }
+  ],
+  "created_at": "2024-12-18T10:30:00Z"
+}
+```
+
+#### Детали заказа
+```http
+GET /api/orders/{order_id}
+Authorization: Bearer {access_token}
+```
+
+#### Сменить статус заказа
+```http
+PATCH /api/orders/{order_id}/status
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "new_status": "confirmed",  // new, confirmed, in_progress, review, completed, cancelled, archived
+  "comment": "Заказ подтверждён, техник назначен"
+}
+```
+
+#### Назначить техника
+```http
+PATCH /api/orders/{order_id}/assign
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "technician_id": 3
+}
+```
+
+---
 
 ### Services
-- `GET /api/services` — Список услуг
-- `POST /api/services` — Создать услугу
-- `PUT /api/services/{id}` — Обновить услугу
-- `DELETE /api/services/{id}` — Удалить услугу
 
-### И другие...
+#### Список услуг
+```http
+GET /api/services?category_id=1&is_active=true&search=коронка&page=1&limit=20
+```
 
-Полная документация: http://localhost:8000/docs
+**Ответ:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "category_id": 1,
+      "category_name": "Металлокерамика",
+      "name": "Металлокерамическая коронка",
+      "description": "Коронка из диоксида циркония",
+      "base_price": 5000.00,
+      "unit": "шт",
+      "duration_days": 5,
+      "is_active": true
+    }
+  ],
+  "total": 19,
+  "page": 1,
+  "limit": 20,
+  "pages": 1
+}
+```
+
+#### Создать услугу
+```http
+POST /api/services
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "category_id": 1,
+  "name": "Винир E-max",
+  "description": "Керамический винир IPS E-max",
+  "base_price": 15000.00,
+  "unit": "шт",
+  "duration_days": 7,
+  "is_active": true
+}
+```
+
+**Доступно:** manager, admin
+
+#### Обновить услугу
+```http
+PUT /api/services/{service_id}
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "name": "Винир E-max Premium",
+  "base_price": 18000.00,
+  "is_active": true
+}
+```
+
+#### Удалить услугу
+```http
+DELETE /api/services/{service_id}
+Authorization: Bearer {access_token}
+```
+
+---
+
+### Material Requests
+
+#### Создать запрос на материал
+```http
+POST /api/materials/requests
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "material_id": 3,
+  "quantity_requested": 5,
+  "comment": "Необходимо для срочного заказа"
+}
+```
+
+**Ответ (201):**
+```json
+{
+  "id": 12,
+  "technician_id": 3,
+  "technician_name": "Алексей Петров",
+  "material_id": 3,
+  "material_name": "Диоксид циркония",
+  "quantity_requested": 5,
+  "status": "pending",  // pending, approved, rejected, issued
+  "comment": "Необходимо для срочного заказа",
+  "created_at": "2024-12-18T11:00:00Z"
+}
+```
+
+**Доступно:** technician
+
+#### Список запросов
+```http
+GET /api/materials/requests?status=pending&technician_id=3
+Authorization: Bearer {access_token}
+```
+
+#### Обработать запрос
+```http
+PATCH /api/materials/requests/{request_id}
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "status": "approved",  // approved, rejected
+  "comment": "Одобрено, выдам завтра"
+}
+```
+
+**Доступно:** manager, admin
+
+---
+
+### Users (Admin)
+
+#### Изменить роль пользователя
+```http
+PATCH /api/users/{user_id}/role
+Authorization: Bearer {access_token}
+Content-Type: application/json
+
+{
+  "role": "manager"  // guest, client, technician, manager, admin
+}
+```
+
+**Ответ (200):**
+```json
+{
+  "id": "f4982b73-6fe3-47ba-acb2-1fab312108f0",
+  "email": "user@example.com",
+  "role": "manager",
+  "first_name": "Иван",
+  "last_name": "Иванов",
+  "is_active": true,
+  "created_at": "2024-01-15T08:00:00Z"
+}
+```
+
+**Доступно:** admin
+
+**Примечание:** Нельзя изменить роль другого администратора (защита от случайного удаления прав)
+
+---
+
+### Полная документация
+
+Откройте Swagger UI: http://localhost:8000/docs
+
+Или ReDoc: http://localhost:8000/redoc
 
 ## 📄 Лицензия
 

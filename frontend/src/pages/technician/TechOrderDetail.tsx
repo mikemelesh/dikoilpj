@@ -268,13 +268,18 @@ export const TechOrderDetail = () => {
             <div className="mt-4">
               {viewFile.file_type.startsWith('image/') ? (
                 <img
-                  src={`${API_BASE_URL.replace('/api', '')}${viewFile.file_path}`}
+                  src={`${API_BASE_URL.replace('/api', '')}${viewFile.file_path.startsWith('/') ? viewFile.file_path : '/' + viewFile.file_path}`}
                   alt={viewFile.file_name}
                   className="w-full h-auto max-h-[70vh] object-contain"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.src = '';
+                  }}
                 />
               ) : viewFile.file_type === 'application/pdf' ? (
                 <iframe
-                  src={`${API_BASE_URL.replace('/api', '')}${viewFile.file_path}`}
+                  src={`${API_BASE_URL.replace('/api', '')}${viewFile.file_path.startsWith('/') ? viewFile.file_path : '/' + viewFile.file_path}`}
                   className="w-full h-[70vh] border rounded"
                   title={viewFile.file_name}
                 />

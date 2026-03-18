@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # === Статусы и приоритеты ===
@@ -62,6 +62,13 @@ class OrderFileResponse(BaseModel):
     file_size: int
     created_at: datetime
     uploaded_by: str
+
+    @field_validator('order_id', 'uploaded_by', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if v is None:
+            return None
+        return str(v)
 
 
 # === История статусов ===

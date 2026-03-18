@@ -8,6 +8,7 @@ load_dotenv(dotenv_path=env_path)
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -68,6 +69,11 @@ def create_app() -> FastAPI:
     app.include_router(knowledge_base_router.router, prefix="/api")
     app.include_router(analytics_router.router, prefix="/api")
     app.include_router(admin_router.router, prefix="/api")
+
+    # Раздача файлов из папки uploads
+    uploads_path = settings.UPLOAD_DIR
+    if uploads_path.exists():
+        app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 
     # Обработчик превышения лимита
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
