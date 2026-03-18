@@ -97,10 +97,13 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 
 def require_roles(allowed_roles: Iterable[str]) -> Callable:
     """Фабрика зависимости для проверки ролей."""
-    allowed_set = set(allowed_roles)
+    # Конвертируем роли в lowercase для сравнения
+    allowed_set = {role.lower() for role in allowed_roles}
 
     async def dependency(current_user: User = Depends(get_current_active_user)) -> User:
-        if current_user.role not in allowed_set:
+        # Получаем роль как строку в lowercase
+        user_role = current_user.role.value.lower() if hasattr(current_user.role, 'value') else str(current_user.role).lower()
+        if user_role not in allowed_set:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав",

@@ -27,15 +27,19 @@ export const TechMaterialRequests = () => {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
 
-  const { data: requests } = useQuery({
+  const { data: requestsData } = useQuery({
     queryKey: ["my-material-requests"],
     queryFn: getMyMaterialRequests,
   });
 
-  const { data: materials } = useQuery({
+  const requests = requestsData?.items || [];
+
+  const { data: materialsData } = useQuery({
     queryKey: ["materials-list"],
     queryFn: getMaterials,
   });
+
+  const materials = materialsData?.items || [];
 
   const createMutation = useMutation({
     mutationFn: (data: RequestFormData) => createMaterialRequest(data),

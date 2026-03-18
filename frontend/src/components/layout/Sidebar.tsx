@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
-import { authStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore";
 import { cn } from "@/utils";
 
 import {
@@ -19,11 +19,10 @@ import {
   Wrench,
   Tag,
   Box,
-  Shield,
   MessageSquare,
   FileBox,
-  Settings,
   LogOut,
+  Calculator,
 } from "lucide-react";
 
 // =============================================================================
@@ -43,6 +42,12 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: "Новый заказ", path: "/client/orders/new", icon: PackagePlus },
     { label: "Архив", path: "/client/archive", icon: Archive },
     { label: "Профиль", path: "/client/profile", icon: User },
+    { label: "Главная", path: "/", icon: LayoutDashboard },
+    { label: "Услуги", path: "/services", icon: Wrench },
+    { label: "Калькулятор", path: "/calculator", icon: Calculator },
+    { label: "Статьи", path: "/articles", icon: BookOpen },
+    { label: "Портфолио", path: "/portfolio", icon: Users },
+    { label: "FAQ", path: "/faq", icon: MessageSquare },
   ],
   technician: [
     { label: "Дашборд", path: "/technician", icon: LayoutDashboard },
@@ -51,6 +56,10 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: "Заявки на материалы", path: "/technician/materials", icon: FileText },
     { label: "База знаний", path: "/technician/knowledge", icon: BookOpen },
     { label: "Профиль", path: "/technician/profile", icon: User },
+    { label: "Главная", path: "/", icon: LayoutDashboard },
+    { label: "Услуги", path: "/services", icon: Wrench },
+    { label: "Калькулятор", path: "/calculator", icon: Calculator },
+    { label: "Статьи", path: "/articles", icon: BookOpen },
   ],
   manager: [
     { label: "Дашборд", path: "/manager", icon: LayoutDashboard },
@@ -61,6 +70,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: "Услуги", path: "/manager/services", icon: Wrench },
     { label: "Акции", path: "/manager/promotions", icon: Tag },
     { label: "Материалы", path: "/manager/materials", icon: Box },
+    { label: "Профиль", path: "/manager/profile", icon: User },
+    { label: "Главная", path: "/", icon: LayoutDashboard },
+    { label: "Услуги", path: "/services", icon: Wrench },
+    { label: "Калькулятор", path: "/calculator", icon: Calculator },
+    { label: "Статьи", path: "/articles", icon: BookOpen },
   ],
   admin: [
     { label: "Дашборд", path: "/admin", icon: LayoutDashboard },
@@ -69,7 +83,11 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: "Отзывы", path: "/admin/reviews", icon: MessageSquare },
     { label: "Логи", path: "/admin/logs", icon: FileText },
     { label: "Резервные копии", path: "/admin/backup", icon: Archive },
-    { label: "Настройки", path: "/admin/settings", icon: Settings },
+    { label: "Профиль", path: "/admin/profile", icon: User },
+    { label: "Главная", path: "/", icon: LayoutDashboard },
+    { label: "Услуги", path: "/services", icon: Wrench },
+    { label: "Калькулятор", path: "/calculator", icon: Calculator },
+    { label: "Статьи", path: "/articles", icon: BookOpen },
   ],
 };
 
@@ -84,8 +102,8 @@ interface SidebarProps {
 
 export const Sidebar = ({ isOpen = true, onClose }: SidebarProps) => {
   const navigate = useNavigate();
-  const { user, logout } = authStore();
-  
+  const { user, logout } = useAuthStore();
+
   const role = user?.role;
   const menuItems = role ? MENU_CONFIG[role] || [] : [];
 

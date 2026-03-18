@@ -15,7 +15,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { OrderStatusTracker } from "@/components/orders/OrderStatusTracker";
 import { FileUpload } from "@/components/shared/FileUpload";
-import { ArrowLeft, Download, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ArrowLeft, Download, Trash2, Eye, FileText } from "lucide-react";
+import { API_BASE_URL } from "@/api/axios";
 
 // Схема для комментария
 const statusChangeSchema = z.object({
@@ -37,6 +39,7 @@ export const TechOrderDetail = () => {
   const queryClient = useQueryClient();
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [viewFile, setViewFile] = useState<any | null>(null);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ["order", id],
@@ -195,22 +198,53 @@ export const TechOrderDetail = () => {
         <CardContent className="space-y-4">
           {order.files && order.files.length > 0 ? (
             <div className="space-y-2">
-              {order.files.map((file) => (
-                <div key={file.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Download className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">{file.file_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {(file.file_size / 1024).toFixed(1)} KB
-                      </p>
+              {order.files.map((file) => {
+                const fileUrl = `${API_BASE_URL.replace('/api', '')}${file.file_path}`;
+                const isImage = file.file_type.startsWith('image/');
+                const isPDF = file.file_type === 'application/pdf';
+                const canView = isImage || isPDF;
+                
+                return (
+                  <div key={file.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      {isImage ? (
+                        <FileText className="h-5 w-5 text-blue-500" />
+                      ) : isPDF ? (
+                        <FileText className="h-5 w-5 text-red-500" />
+                      ) : (
+                        <Download className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      <div>
+                        <p className="font-medium">{file.file_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(file.created_at).toLocaleDateString("ru-RU")} • {(file.file_size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {canView && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setViewFile(file)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <a
+                        href={fileUrl}
+                        download={file.file_name}
+                        className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-accent transition-colors"
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate({ orderId: order.id, fileId: file.id })}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate({ orderId: order.id, fileId: file.id })}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <p className="text-muted-foreground">Нет файлов</p>
@@ -223,6 +257,36 @@ export const TechOrderDetail = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Модальное окно просмотра файла */}
+      <Dialog open={!!viewFile} onOpenChange={() => setViewFile(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{viewFile?.file_name}</DialogTitle>
+          </DialogHeader>
+          {viewFile && (
+            <div className="mt-4">
+              {viewFile.file_type.startsWith('image/') ? (
+                <img
+                  src={`${API_BASE_URL.replace('/api', '')}${viewFile.file_path}`}
+                  alt={viewFile.file_name}
+                  className="w-full h-auto max-h-[70vh] object-contain"
+                />
+              ) : viewFile.file_type === 'application/pdf' ? (
+                <iframe
+                  src={`${API_BASE_URL.replace('/api', '')}${viewFile.file_path}`}
+                  className="w-full h-[70vh] border rounded"
+                  title={viewFile.file_name}
+                />
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  Предпросмотр недоступен для этого типа файла
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* История статусов */}
       {order.status_history && order.status_history.length > 0 && (

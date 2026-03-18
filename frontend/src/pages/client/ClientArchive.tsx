@@ -19,7 +19,7 @@ export const ClientArchive = () => {
     queryFn: () => getOrders({
       page,
       limit,
-      status: filters.status || "completed,cancelled,archived",
+      status: filters.status ? [filters.status] : ["completed", "cancelled", "archived"],
       date_from: filters.date_from,
       date_to: filters.date_to,
     }),

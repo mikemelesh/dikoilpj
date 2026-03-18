@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -46,18 +46,50 @@ export const ClientNewOrder = () => {
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [finalPrice, setFinalPrice] = useState<number>(0);
 
+  // Загрузка данных из localStorage (из калькулятора)
+  useEffect(() => {
+    const pendingOrder = localStorage.getItem("pending_order");
+    if (pendingOrder) {
+      try {
+        const orderData = JSON.parse(pendingOrder);
+        if (orderData?.items && orderData.items.length > 0) {
+          // Очищаем форму и добавляем услуги из калькулятора
+          reset({
+            items: orderData.items,
+            notes: "",
+            deadline: "",
+            priority: "normal",
+          });
+          setStep(1);
+          // Очищаем localStorage после загрузки
+          localStorage.removeItem("pending_order");
+          toast.success("Услуги добавлены из калькулятора");
+        }
+      } catch (e) {
+        console.error("Ошибка загрузки данных из калькулятора:", e);
+        localStorage.removeItem("pending_order");
+      }
+    }
+  }, []);
+
   const { data: categoriesData } = useQuery({
     queryKey: ["service-categories"],
-    queryFn: () => apiClient.get<ServiceCategory[]>("/services/categories"),
+    queryFn: async () => {
+      const res = await apiClient.get<ServiceCategory[]>("/services/categories");
+      return res.data;
+    },
   });
 
   const { data: servicesData } = useQuery({
     queryKey: ["services"],
-    queryFn: () => apiClient.get<Service[]>("/services?limit=100"),
+    queryFn: async () => {
+      const res = await apiClient.get<{ items: Service[] }>("/services?limit=100");
+      return res.data;
+    },
   });
 
-  const categories = categoriesData?.data || [];
-  const services = servicesData?.data || [];
+  const categories = (categoriesData as ServiceCategory[]) || [];
+  const services = (servicesData as { items: Service[] })?.items || [];
 
   const { register, control, handleSubmit, watch, formState: { errors } } = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -85,7 +117,6 @@ export const ClientNewOrder = () => {
 
       const response = await apiClient.post("/calculator/calculate", {
         items: validItems.map((i) => ({ service_id: i.service_id, quantity: i.quantity })),
-        client_id: (user as any)?.client_profile?.id,
       });
 
       setCalculatedTotal(Number(response.data.subtotal));
@@ -106,7 +137,18 @@ export const ClientNewOrder = () => {
   });
 
   const onSubmit = (data: OrderFormData) => {
-    createMutation.mutate(data);
+    // Фильтрация элементов с service_id <= 0
+    const validData = {
+      ...data,
+      items: data.items.filter((i) => i.service_id > 0),
+    };
+
+    if (validData.items.length === 0) {
+      toast.error("Добавьте хотя бы одну услугу");
+      return;
+    }
+
+    createMutation.mutate(validData);
   };
 
   const formatPrice = (price: number) =>

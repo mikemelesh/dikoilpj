@@ -31,7 +31,7 @@ export const ManagerGantt = () => {
 
   const { data: ordersData } = useQuery({
     queryKey: ["gantt-orders"],
-    queryFn: () => getOrders({ status: "confirmed,in_progress,review", limit: 100 }),
+    queryFn: () => getOrders({ status: ["confirmed", "in_progress", "review"], limit: 100 }),
   });
 
   const orders = ordersData?.items || [];
@@ -40,15 +40,15 @@ export const ManagerGantt = () => {
   const tasks: Task[] = orders.map((order) => {
     const created = new Date(order.created_at);
     const deadline = order.deadline ? new Date(order.deadline) : new Date(created.getTime() + 7 * 24 * 60 * 60 * 1000);
-    
+
     return {
       id: order.id,
-      name: `${order.order_number} — ${order.client?.user?.first_name || "Клиент"}`,
+      name: `${order.order_number} — ${order.client_name || "Клиент"}`,
       start: created,
       end: deadline,
       progress: statusToProgress(order.status),
       type: "task",
-      project: order.technician ? `${order.technician.user.first_name} ${order.technician.user.last_name}` : "Не назначен",
+      project: order.technician_name || "Не назначен",
       styles: { progressColor: statusColor(order.status), progressSelectedColor: statusColor(order.status) },
     } as Task;
   });
@@ -100,8 +100,8 @@ export const ManagerGantt = () => {
             </div>
 
             <div className="space-y-2">
-              <p><span className="font-medium">Клиент:</span> {selectedOrderData.client?.user?.first_name} {selectedOrderData.client?.user?.last_name}</p>
-              <p><span className="font-medium">Техник:</span> {selectedOrderData.technician ? `${selectedOrderData.technician.user.first_name} ${selectedOrderData.technician.user.last_name}` : "Не назначен"}</p>
+              <p><span className="font-medium">Клиент:</span> {selectedOrderData.client_name || "Не указан"}</p>
+              <p><span className="font-medium">Техник:</span> {selectedOrderData.technician_name || "Не назначен"}</p>
               <p><span className="font-medium">Создан:</span> {new Date(selectedOrderData.created_at).toLocaleDateString("ru-RU")}</p>
               {selectedOrderData.deadline && <p><span className="font-medium">Дедлайн:</span> {new Date(selectedOrderData.deadline).toLocaleDateString("ru-RU")}</p>}
               <p><span className="font-medium">Сумма:</span> {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(selectedOrderData.final_price))}</p>

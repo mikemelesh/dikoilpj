@@ -16,7 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
-from backend.app.database import Base
+from ..database import Base
 
 
 class OrderStatus(str, PyEnum):
@@ -75,6 +75,7 @@ class Order(Base):
     status_history = relationship(
         "OrderStatusHistory", back_populates="order", cascade="all, delete-orphan"
     )
+    reviews = relationship("Review", back_populates="order")
 
 
 class OrderItem(Base):

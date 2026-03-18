@@ -31,7 +31,9 @@ export const ManagerPromotions = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingPromotion, setEditingPromotion] = useState<any>(null);
 
-  const { data: promotions } = useQuery({ queryKey: ["manager-promotions"], queryFn: getPromotions });
+  const { data: promotionsData } = useQuery({ queryKey: ["manager-promotions"], queryFn: getPromotions });
+
+  const promotions = promotionsData?.items || [];
 
   const createMutation = useMutation({ mutationFn: createPromotion, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); toast.success("Акция создана"); setModalOpen(false); }, onError: () => toast.error("Ошибка создания") });
   const updateMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: any }) => updatePromotion(id, data), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); toast.success("Акция обновлена"); setModalOpen(false); setEditingPromotion(null); }, onError: () => toast.error("Ошибка обновления") });

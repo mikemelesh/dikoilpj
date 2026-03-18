@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..dependencies.auth import get_current_active_user, require_roles
@@ -23,10 +23,26 @@ from ..utils.security import log_action
 router = APIRouter(prefix="/knowledge-base", tags=["knowledge-base"])
 
 
+def _get_author_name(db: Session, user_id: str) -> Optional[str]:
+    """Получить имя автора по ID пользователя."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        return f"{user.first_name} {user.last_name}"
+    return None
+
+
+def _get_author_names_bulk(db: Session, user_ids: List[str]) -> dict:
+    """Получить имена авторов по списку ID пользователей."""
+    if not user_ids:
+        return {}
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    return {str(u.id): f"{u.first_name} {u.last_name}" for u in users}
+
+
 @router.get("", response_model=KnowledgeBaseListResponse)
 async def get_knowledge_base(
     category: Optional[str] = Query(None, description="Фильтр по категории"),
-    search: Optional[str] = Query(None, min_length=1, description="Поиск по заголовку"),
+    search: Optional[str] = Query(None, description="Поиск по заголовку"),
     tags: Optional[str] = Query(None, description="Теги через запятую"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
@@ -37,18 +53,16 @@ async def get_knowledge_base(
     Получить список записей базы знаний.
     Доступно: technician, manager, admin.
     """
-    query = db.query(KnowledgeBase).options(
-        joinedload(KnowledgeBase.author)
-    )
-    
+    query = db.query(KnowledgeBase)
+
     # Показываем только опубликованные для technician, все для manager/admin
     if current_user.role == UserRole.TECHNICIAN:
         query = query.filter(KnowledgeBase.is_published == True)
-    
+
     # Фильтры
     if category:
         query = query.filter(KnowledgeBase.category == category)
-    
+
     if search:
         search_pattern = f"%{search}%"
         query = query.filter(
@@ -57,17 +71,21 @@ async def get_knowledge_base(
                 KnowledgeBase.content.ilike(search_pattern),
             )
         )
-    
+
     if tags:
         tag_list = [t.strip() for t in tags.split(",")]
         # PostgreSQL array overlap
         query = query.filter(KnowledgeBase.tags.overlap(tag_list))
-    
+
     total = query.count()
     pages = math.ceil(total / limit) if total > 0 else 0
     offset = (page - 1) * limit
     records = query.order_by(KnowledgeBase.created_at.desc()).offset(offset).limit(limit).all()
-    
+
+    # Загружаем имена авторов bulk-запросом
+    author_ids = [str(r.created_by) for r in records]
+    author_names = _get_author_names_bulk(db, author_ids)
+
     items = [
         KnowledgeBaseResponse(
             id=r.id,
@@ -76,14 +94,14 @@ async def get_knowledge_base(
             category=r.category,
             tags=r.tags,
             created_by=str(r.created_by),
-            author_name=f"{r.author.first_name} {r.author.last_name}" if r.author else None,
+            author_name=author_names.get(str(r.created_by)),
             is_published=r.is_published,
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
         for r in records
     ]
-    
+
     return KnowledgeBaseListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
 
 
@@ -97,23 +115,24 @@ async def get_knowledge_record(
     Получить запись базы знаний по ID.
     Доступно: technician, manager, admin.
     """
-    record = db.query(KnowledgeBase).options(
-        joinedload(KnowledgeBase.author)
-    ).filter(KnowledgeBase.id == record_id).first()
-    
+    record = db.query(KnowledgeBase).filter(KnowledgeBase.id == record_id).first()
+
     if not record:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Запись не найдена"
         )
-    
+
     # Проверка доступа
     if current_user.role == UserRole.TECHNICIAN and not record.is_published:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Запись не найдена"
         )
-    
+
+    # Загружаем имя автора
+    author_name = _get_author_name(db, str(record.created_by))
+
     return KnowledgeBaseResponse(
         id=record.id,
         title=record.title,
@@ -121,7 +140,7 @@ async def get_knowledge_record(
         category=record.category,
         tags=record.tags,
         created_by=str(record.created_by),
-        author_name=f"{record.author.first_name} {record.author.last_name}" if record.author else None,
+        author_name=author_name,
         is_published=record.is_published,
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -149,7 +168,7 @@ async def create_knowledge_record(
     db.add(db_record)
     db.commit()
     db.refresh(db_record)
-    
+
     log_action(
         db=db,
         user_id=str(current_user.id),
@@ -158,7 +177,7 @@ async def create_knowledge_record(
         entity_id=str(db_record.id),
         description=f"Создана запись БЗ {db_record.title}",
     )
-    
+
     return KnowledgeBaseResponse(
         id=db_record.id,
         title=db_record.title,
@@ -190,15 +209,15 @@ async def update_knowledge_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Запись не найдена"
         )
-    
+
     update_data = record_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(record, field, value)
-    
+
     db.add(record)
     db.commit()
     db.refresh(record)
-    
+
     log_action(
         db=db,
         user_id=str(current_user.id),
@@ -207,7 +226,10 @@ async def update_knowledge_record(
         entity_id=str(record_id),
         description=f"Обновлена запись БЗ {record.title}",
     )
-    
+
+    # Загружаем имя автора
+    author_name = _get_author_name(db, str(record.created_by))
+
     return KnowledgeBaseResponse(
         id=record.id,
         title=record.title,
@@ -215,7 +237,7 @@ async def update_knowledge_record(
         category=record.category,
         tags=record.tags,
         created_by=str(record.created_by),
-        author_name=f"{record.author.first_name} {record.author.last_name}" if record.author else None,
+        author_name=author_name,
         is_published=record.is_published,
         created_at=record.created_at,
         updated_at=record.updated_at,
@@ -238,7 +260,7 @@ async def delete_knowledge_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Запись не найдена"
         )
-    
+
     log_action(
         db=db,
         user_id=str(current_user.id),
@@ -247,8 +269,8 @@ async def delete_knowledge_record(
         entity_id=str(record_id),
         description=f"Удалена запись БЗ {record.title}",
     )
-    
+
     db.delete(record)
     db.commit()
-    
+
     return None

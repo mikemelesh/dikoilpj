@@ -96,8 +96,15 @@ export const assignTechnician = async (orderId: string, technicianId: number): P
 /**
  * Получение списка услуг
  */
-export const getServices = async (): Promise<Service[]> => {
-  const response = await apiClient.get<Service[]>("/services");
+export const getServices = async (params?: { category_id?: number; is_active?: boolean; search?: string; page?: number; limit?: number }): Promise<{ items: Service[]; total: number; page: number; limit: number; pages: number }> => {
+  const queryParams = new URLSearchParams();
+  if (params?.category_id) queryParams.append("category_id", String(params.category_id));
+  if (params?.is_active !== undefined) queryParams.append("is_active", String(params.is_active));
+  if (params?.search) queryParams.append("search", params.search);
+  if (params?.page) queryParams.append("page", String(params.page));
+  if (params?.limit) queryParams.append("limit", String(params.limit));
+
+  const response = await apiClient.get(`/services?${queryParams}`);
   return response.data;
 };
 
@@ -127,8 +134,8 @@ export const deleteService = async (id: number): Promise<void> => {
 /**
  * Получение списка акций
  */
-export const getPromotions = async (): Promise<Promotion[]> => {
-  const response = await apiClient.get<Promotion[]>("/promotions");
+export const getPromotions = async (): Promise<{ items: Promotion[]; total: number }> => {
+  const response = await apiClient.get("/promotions");
   return response.data;
 };
 
@@ -156,13 +163,25 @@ export const deletePromotion = async (id: number): Promise<void> => {
 };
 
 /**
+ * Получение списка материалов
+ */
+export const getMaterials = async (params?: { search?: string; low_stock_only?: boolean }): Promise<{ items: Material[]; total: number }> => {
+  const queryParams = new URLSearchParams();
+  if (params?.search) queryParams.append("search", params.search);
+  if (params?.low_stock_only) queryParams.append("low_stock_only", String(params.low_stock_only));
+
+  const response = await apiClient.get(`/materials?${queryParams}`);
+  return response.data;
+};
+
+/**
  * Получение заявок на материалы
  */
-export const getMaterialRequests = async (params?: { status?: string; technician_id?: number }): Promise<MaterialRequest[]> => {
+export const getMaterialRequests = async (params?: { status?: string; technician_id?: number }): Promise<{ items: MaterialRequest[]; total: number }> => {
   const queryParams = new URLSearchParams();
   if (params?.status) queryParams.append("status", params.status);
   if (params?.technician_id) queryParams.append("technician_id", String(params.technician_id));
-  
+
   const response = await apiClient.get(`/materials/requests?${queryParams}`);
   return response.data;
 };

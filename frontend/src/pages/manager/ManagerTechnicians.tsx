@@ -4,8 +4,20 @@ import { Link } from "react-router-dom";
 import { getTechnicians } from "@/api/manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Star } from "lucide-react";
+
+// Функция для получения имени техника
+const getTechnicianName = (tech: any) => {
+  if (tech.first_name && tech.last_name) {
+    return `${tech.first_name} ${tech.last_name}`;
+  }
+  if (tech.user?.first_name && tech.user?.last_name) {
+    return `${tech.user.first_name} ${tech.user.last_name}`;
+  }
+  return "Техник";
+};
 
 export const ManagerTechnicians = () => {
   const { data: technicians, isLoading } = useQuery({
@@ -40,8 +52,8 @@ export const ManagerTechnicians = () => {
                   <TableRow key={tech.id}>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{tech.user?.first_name} {tech.user?.last_name}</p>
-                        <p className="text-sm text-muted-foreground">{tech.user?.email}</p>
+                        <p className="font-medium">{getTechnicianName(tech)}</p>
+                        <p className="text-sm text-muted-foreground">{tech.user?.email || tech.user_id}</p>
                       </div>
                     </TableCell>
                     <TableCell>{tech.specialization || "Универсал"}</TableCell>

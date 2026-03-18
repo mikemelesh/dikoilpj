@@ -6,7 +6,7 @@ import type { Order, OrderFile, OrderStatus, OrderItem } from "@/types";
 // =============================================================================
 
 export interface GetOrdersParams {
-  status?: string;
+  status?: string | string[];
   priority?: string;
   date_from?: string;
   date_to?: string;
@@ -28,7 +28,7 @@ export interface UpdateOrderStatusData {
 }
 
 export interface OrdersResponse {
-  items: Order[];
+  items: (Order & { technician_name?: string })[];
   total: number;
   page: number;
   limit: number;
@@ -44,8 +44,15 @@ export interface OrdersResponse {
  */
 export const getOrders = async (params?: GetOrdersParams): Promise<OrdersResponse> => {
   const queryParams = new URLSearchParams();
-  
-  if (params?.status) queryParams.append("status", params.status);
+
+  // Поддержка множественных статусов
+  if (params?.status) {
+    if (Array.isArray(params.status)) {
+      params.status.forEach(s => queryParams.append("status", s));
+    } else {
+      queryParams.append("status", params.status);
+    }
+  }
   if (params?.priority) queryParams.append("priority", params.priority);
   if (params?.date_from) queryParams.append("date_from", params.date_from);
   if (params?.date_to) queryParams.append("date_to", params.date_to);

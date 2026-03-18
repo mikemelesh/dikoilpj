@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
-from backend.app.database import Base
-from backend.app.models.user import LoyaltyTier
+from ..database import Base
+from .user import LoyaltyTier
 
 
 class Client(Base):
@@ -20,4 +20,5 @@ class Client(Base):
 
     user = relationship("User", back_populates="client_profile")
     orders = relationship("Order", back_populates="client")
+    reviews = relationship("Review", back_populates="client")
 

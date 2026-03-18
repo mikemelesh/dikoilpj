@@ -3,7 +3,7 @@
 """
 import math
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -58,13 +58,97 @@ def generate_order_number() -> str:
 def get_order_with_relations(db: Session, order_id: str) -> Optional[Order]:
     """Получение заказа со всеми связями."""
     return db.query(Order).options(
-        joinedload(Order.items).joinedload(OrderItem.service),
+        joinedload(Order.items),
         joinedload(Order.files),
         joinedload(Order.status_history),
         joinedload(Order.client).joinedload(Client.user),
         joinedload(Order.technician).joinedload(Technician.user),
         joinedload(Order.manager),
     ).filter(Order.id == order_id).first()
+
+
+def get_order_response(db: Session, order: Order) -> OrderResponse:
+    """Формирование ответа заказа с названиями услуг."""
+    # Загружаем названия услуг для всех items
+    service_ids = {item.service_id for item in order.items}
+    services = {s.id: s.name for s in db.query(Service).filter(Service.id.in_(service_ids)).all()} if service_ids else {}
+
+    # Формируем client_name
+    client_name = None
+    if order.client and order.client.user:
+        client_name = f"{order.client.user.first_name} {order.client.user.last_name}"
+
+    # Формируем technician_name
+    technician_name = None
+    if order.technician and order.technician.user:
+        technician_name = f"{order.technician.user.first_name} {order.technician.user.last_name}"
+
+    # Формируем items с service_name
+    items_data = [
+        {
+            "id": item.id,
+            "order_id": str(item.order_id),
+            "service_id": item.service_id,
+            "service_name": services.get(item.service_id),
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "total_price": item.total_price,
+            "specifications": item.specifications,
+        }
+        for item in order.items
+    ]
+
+    # Формируем files
+    files_data = [
+        {
+            "id": f.id,
+            "order_id": str(f.order_id),
+            "file_name": f.file_name,
+            "file_path": f.file_path,
+            "file_type": f.file_type,
+            "file_size": f.file_size,
+            "created_at": f.created_at,
+            "uploaded_by": str(f.uploaded_by),
+        }
+        for f in order.files
+    ]
+
+    # Формируем status_history
+    status_history_data = [
+        {
+            "id": h.id,
+            "order_id": str(h.order_id),
+            "old_status": h.old_status,
+            "new_status": h.new_status,
+            "comment": h.comment,
+            "created_at": h.created_at,
+            "changed_by": str(h.changed_by),
+        }
+        for h in order.status_history
+    ]
+
+    return OrderResponse(
+        id=str(order.id),
+        order_number=order.order_number,
+        client_id=order.client_id,
+        client_name=client_name,
+        technician_id=order.technician_id,
+        technician_name=technician_name,
+        manager_id=str(order.manager_id) if order.manager_id else None,
+        status=order.status,
+        priority=order.priority,
+        total_price=order.total_price,
+        discount_amount=order.discount_amount,
+        final_price=order.final_price,
+        notes=order.notes,
+        deadline=order.deadline,
+        created_at=order.created_at,
+        updated_at=order.updated_at,
+        completed_at=order.completed_at,
+        items=items_data,
+        files=files_data,
+        status_history=status_history_data,
+    )
 
 
 def create_status_history(
@@ -94,7 +178,7 @@ def create_status_history(
 
 @router.get("", response_model=OrderListResponse)
 async def get_orders(
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: Optional[list[str]] = Query(None, alias="status"),
     priority: Optional[str] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
@@ -107,20 +191,26 @@ async def get_orders(
 ):
     """
     Получить список заказов с фильтрами.
-    
+
     - client видит только свои заказы
     - technician видит назначенные ему заказы
     - manager/admin видят все заказы
+    
+    status_filter может принимать несколько значений: ?status=completed&status=archived
     """
-    # Валидация статуса и приоритета
+    # Валидация статусов и приоритета
     valid_statuses = ["new", "confirmed", "in_progress", "review", "completed", "cancelled", "archived"]
     valid_priorities = ["normal", "urgent", "critical"]
+
+    # Проверяем все переданные статусы
+    if status_filter:
+        for s in status_filter:
+            if s not in valid_statuses:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Недопустимый статус: {s}. Допустимые: {', '.join(valid_statuses)}"
+                )
     
-    if status_filter and status_filter not in valid_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Недопустимый статус. Допустимые: {', '.join(valid_statuses)}"
-        )
     if priority and priority not in valid_priorities:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -152,7 +242,7 @@ async def get_orders(
     
     # Фильтры
     if status_filter:
-        query = query.filter(Order.status == status_filter)
+        query = query.filter(Order.status.in_(status_filter))
     if priority:
         query = query.filter(Order.priority == priority)
     if date_from:
@@ -171,6 +261,11 @@ async def get_orders(
     # Формируем ответ
     items = []
     for order in orders:
+        # Формируем technician_name
+        technician_name = None
+        if order.technician and order.technician.user:
+            technician_name = f"{order.technician.user.first_name} {order.technician.user.last_name}"
+
         items.append(OrderSummaryResponse(
             id=str(order.id),
             order_number=order.order_number,
@@ -179,6 +274,8 @@ async def get_orders(
             final_price=order.final_price,
             created_at=order.created_at,
             deadline=order.deadline,
+            technician_id=order.technician_id,
+            technician_name=technician_name,
         ))
 
     return OrderListResponse(
@@ -295,7 +392,7 @@ async def create_order(
         description=f"Создан заказ {order.order_number}",
     )
 
-    return get_order_with_relations(db, str(order.id))
+    return get_order_response(db, order)
 
 
 # =============================================================================
@@ -327,7 +424,7 @@ async def get_order(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Доступ запрещён"
             )
-    
+
     elif current_user.role == UserRole.TECHNICIAN:
         technician_profile = db.query(Technician).filter(Technician.user_id == current_user.id).first()
         if not technician_profile or order.technician_id != technician_profile.id:
@@ -336,7 +433,7 @@ async def get_order(
                 detail="Доступ запрещён"
             )
 
-    return order
+    return get_order_response(db, order)
 
 
 # =============================================================================
@@ -394,7 +491,7 @@ async def update_order(
         description=f"Обновлён заказ {order.order_number}",
     )
 
-    return order
+    return get_order_response(db, order)
 
 
 # =============================================================================
@@ -453,7 +550,7 @@ async def update_order_status(
     # Обновляем статус
     order.status = new_status
     if new_status == "completed":
-        order.completed_at = datetime.utcnow()
+        order.completed_at = datetime.now(timezone.utc)
 
     # Создаём запись в истории
     create_status_history(
@@ -482,7 +579,7 @@ async def update_order_status(
         description=f"Статус заказа {order.order_number} изменён: {old_status} → {new_status}",
     )
 
-    return order
+    return get_order_response(db, order)
 
 
 # =============================================================================
@@ -536,7 +633,7 @@ async def assign_technician(
         description=f"Назначен техник {technician.user.first_name} {technician.user.last_name}",
     )
 
-    return order
+    return get_order_response(db, order)
 
 
 # =============================================================================

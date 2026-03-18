@@ -32,7 +32,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login } = authStore();
+  const login = authStore((state) => state.login);
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -52,17 +52,22 @@ export const LoginPage = () => {
 
     try {
       const response = await loginApi(data);
-      
+
+      // Проверяем, что пользователь есть в ответе
+      if (!response.user) {
+        throw new Error("Не удалось получить данные пользователя");
+      }
+
       // Сохраняем токены и пользователя в store
       login(
         { access_token: response.access_token, refresh_token: response.refresh_token },
-        response.user!
+        response.user
       );
 
       toast.success("Вход выполнен успешно");
-      
+
       // Редирект на дашборд роли
-      const dashboardPath = getDashboardPath(response.user!.role);
+      const dashboardPath = getDashboardPath(response.user.role);
       navigate(dashboardPath, { replace: true });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Ошибка входа";

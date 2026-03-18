@@ -212,19 +212,19 @@ class OrderAnalyticsResponse(BaseModel):
 class RevenueByPeriod(BaseModel):
     """Доход по периодам."""
     date: str
-    amount: Decimal
+    amount: float
 
 
 class RevenueByCategory(BaseModel):
     """Доход по категориям."""
     category_id: int
     category_name: str
-    total: Decimal
+    total: float
 
 
 class RevenueAnalyticsResponse(BaseModel):
     """Аналитика доходов."""
-    total: Decimal
+    total: float
     by_period: List[RevenueByPeriod]
     by_service_category: List[RevenueByCategory]
 

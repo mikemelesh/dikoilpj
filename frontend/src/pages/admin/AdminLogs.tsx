@@ -14,18 +14,24 @@ interface ActionLog { id: number; user_id?: string; user_email?: string; action_
 
 export const AdminLogs = () => {
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({ action_type: "", user_id: "", date_from: "", date_to: "" });
+  const [filters, setFilters] = useState({ action_type: "", user_email: "", date_from: "", date_to: "" });
   const limit = 50;
 
-  const { data, isLoading } = useQuery<{ items: ActionLog[]; total: number }>({
+  const { data, isLoading, error } = useQuery<{ items: ActionLog[]; total: number }>({
     queryKey: ["admin-logs", page, filters],
     queryFn: () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
       if (filters.action_type) params.append("action_type", filters.action_type);
-      if (filters.user_id) params.append("user_id", filters.user_id);
+      if (filters.user_email) params.append("user_id", filters.user_email);
       if (filters.date_from) params.append("date_from", filters.date_from);
       if (filters.date_to) params.append("date_to", filters.date_to);
       return apiClient.get(`/admin/logs?${params}`).then(r => r.data);
+    },
+    retry: (failureCount, error) => {
+      if (error.response && error.response.status >= 400 && error.response.status < 500) {
+        return false;
+      }
+      return failureCount < 3;
     },
   });
 
@@ -60,15 +66,28 @@ export const AdminLogs = () => {
         <CardContent className="pt-6">
           <div className="grid gap-4 md:grid-cols-5">
             <div className="md:col-span-2">
-              <Label>Поиск по пользователю</Label>
+              <Label>Поиск по email пользователя</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Email или ID" value={filters.user_id} onChange={(e) => setFilters({ ...filters, user_id: e.target.value })} />
+                <Input
+                  placeholder="user@example.com"
+                  value={filters.user_email}
+                  onChange={(e) => setFilters({ ...filters, user_email: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      // Поиск по нажатию Enter
+                    }
+                  }}
+                />
               </div>
             </div>
             <div>
               <Label>Тип действия</Label>
-              <Input value={filters.action_type} onChange={(e) => setFilters({ ...filters, action_type: e.target.value })} placeholder="login, create_order..." />
+              <Input
+                value={filters.action_type}
+                onChange={(e) => setFilters({ ...filters, action_type: e.target.value })}
+                placeholder="login, create_order..."
+              />
             </div>
             <div>
               <Label>Дата от</Label>
@@ -81,6 +100,17 @@ export const AdminLogs = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Обработка ошибки */}
+      {error && (
+        <Card>
+          <CardContent className="py-6">
+            <p className="text-destructive text-center">
+              Ошибка загрузки: {(error as any).message || "Проверьте подключение к серверу"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="space-y-4">{[...Array(10)].map((_, i) => <Card key={i} className="animate-pulse"><CardContent className="py-6"><div className="h-6 w-3/4 bg-muted rounded" /></CardContent></Card>)}</div>

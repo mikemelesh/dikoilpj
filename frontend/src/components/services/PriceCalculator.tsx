@@ -43,7 +43,7 @@ interface PriceCalculatorProps {
 
 export const PriceCalculator = ({ services }: PriceCalculatorProps) => {
   const navigate = useNavigate();
-  const { isAuthenticated } = authStore();
+  const isAuthenticated = authStore((state) => state.isAuthenticated);
   
   const [rows, setRows] = useState<CalculatorRow[]>([
     { service_id: 0, service_name: "", quantity: 1, unit_price: 0, total: 0 },
@@ -272,10 +272,15 @@ export const PriceCalculator = ({ services }: PriceCalculatorProps) => {
             </div>
 
             {/* Кнопка оформления заказа */}
-            <Button className="w-full" onClick={handleCreateOrder}>
-              <ShoppingCart className="mr-2 h-4 w-4" />
-              Оформить заказ
-            </Button>
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Услуги будут перенесены в форму создания заказа
+              </p>
+              <Button className="w-full" onClick={handleCreateOrder}>
+                <ShoppingCart className="mr-2 h-4 w-4" />
+                Оформить заказ
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

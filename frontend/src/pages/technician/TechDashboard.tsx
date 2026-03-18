@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { authStore } from "@/stores/authStore";
 import { getTechnicianOrders, getMyMaterialRequests, getTechnicianStats } from "@/api/technicians";
@@ -12,27 +13,41 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recha
 export const TechDashboard = () => {
   const { user } = authStore();
 
-  // Заказы в работе
-  const { data: ordersData } = useQuery({
+  // Заказы в работе - используем правильный статус
+  const { data: ordersData, isLoading: ordersLoading } = useQuery({
     queryKey: ["tech-orders-dashboard"],
-    queryFn: () => getTechnicianOrders({ status: "in_progress", limit: 10 }),
+    queryFn: () => getTechnicianOrders({ status: ["in_progress", "confirmed", "review", "new"], limit: 50 }),
+    retry: 2,
   });
 
   // Заявки на материалы
-  const { data: materialRequests } = useQuery({
+  const { data: materialRequestsData } = useQuery({
     queryKey: ["tech-material-requests"],
     queryFn: getMyMaterialRequests,
+    retry: 2,
   });
 
-  // Статистика
-  const { data: stats } = useQuery({
+  const materialRequests = materialRequestsData?.items || [];
+  const pendingRequests = materialRequests.filter((r) => r.status === "pending");
+
+  // Статистика - с обработкой ошибок
+  const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
     queryKey: ["tech-stats"],
     queryFn: getTechnicianStats,
+    retry: 2,
   });
 
   const orders = ordersData?.items || [];
-  const pendingRequests = materialRequests?.filter((r) => r.status === "pending") || [];
-  
+
+  console.log("Tech Dashboard Debug:", { 
+    user, 
+    stats, 
+    statsError, 
+    orders, 
+    ordersLoading, 
+    statsLoading 
+  });
+
   // Заказы с дедлайном сегодня или просроченные
   const today = new Date();
   today.setHours(23, 59, 59, 999);

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { apiClient } from "@/api/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 import type { Article } from "@/types";
 import { toast } from "react-toastify";
 
@@ -26,20 +27,27 @@ export const FaqPage = () => {
   }, []);
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-8">
-      <h1 className="mb-8 text-3xl font-bold">Часто задаваемые вопросы</h1>
+    <PublicLayout title="Часто задаваемые вопросы">
       <div className="space-y-4">
-        {faqs.map((faq, index) => (
-          <Card key={index}>
-            <CardHeader>
-              <CardTitle className="text-lg">{faq.question}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground whitespace-pre-wrap">{faq.answer}</p>
+        {faqs.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              Вопросы не найдены
             </CardContent>
           </Card>
-        ))}
+        ) : (
+          faqs.map((faq, index) => (
+            <Card key={index}>
+              <CardHeader>
+                <CardTitle className="text-lg">{faq.question}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground whitespace-pre-wrap">{faq.answer}</p>
+              </CardContent>
+            </Card>
+          ))
+        )}
       </div>
-    </div>
+    </PublicLayout>
   );
 };

@@ -7,12 +7,14 @@ import { toast } from "react-toastify";
 
 import { register as registerApi } from "@/api/auth";
 import { authStore } from "@/stores/authStore";
+import { getDashboardPath } from "@/router";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Mail, Lock, User, Phone } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Building2, Mail, Lock, User, Phone, UserCheck } from "lucide-react";
 
 // =============================================================================
 // Схема валидации
@@ -29,6 +31,9 @@ const registerSchema = z.object({
   first_name: z.string().min(1, "Введите имя"),
   last_name: z.string().min(1, "Введите фамилию"),
   phone: z.string().optional(),
+  role: z.enum(["client", "manager", "technician"], {
+    errorMap: () => ({ message: "Выберите корректную роль" })
+  }),
 }).refine((data) => data.password === data.confirm_password, {
   message: "Пароли не совпадают",
   path: ["confirm_password"],
@@ -42,8 +47,9 @@ type RegisterFormData = z.infer<typeof registerSchema>;
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
-  const { login } = authStore();
+  const login = authStore((state) => state.login);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<string>("client");
 
   const {
     register,
@@ -58,6 +64,7 @@ export const RegisterPage = () => {
       first_name: "",
       last_name: "",
       phone: "",
+      role: "client",
     },
   });
 
@@ -66,19 +73,25 @@ export const RegisterPage = () => {
 
     try {
       const { confirm_password, ...registerData } = data;
-      
+
       const response = await registerApi(registerData);
-      
+
+      // Проверяем, что пользователь есть в ответе
+      if (!response.user) {
+        throw new Error("Не удалось получить данные пользователя");
+      }
+
       // Автологин после регистрации
       login(
         { access_token: response.access_token, refresh_token: response.refresh_token },
-        response.user!
+        response.user
       );
 
       toast.success("Регистрация успешна");
-      
-      // Редирект на клиентский дашборд
-      navigate("/client", { replace: true });
+
+      // Редирект на дашборд согласно роли
+      const dashboardPath = getDashboardPath(response.user.role);
+      navigate(dashboardPath, { replace: true });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Ошибка регистрации";
       toast.error(message);
@@ -96,7 +109,7 @@ export const RegisterPage = () => {
           </div>
           <CardTitle className="text-2xl text-center">Регистрация</CardTitle>
           <CardDescription className="text-center">
-            Создайте аккаунт для доступа к личному кабинету
+            Создайте аккаунт для доступа к личному кабинету. Выберите роль при регистрации.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -168,6 +181,35 @@ export const RegisterPage = () => {
               </div>
               {errors.phone && (
                 <p className="text-sm text-destructive">{errors.phone.message}</p>
+              )}
+            </div>
+
+            {/* Role Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="role">Роль</Label>
+              <div className="relative">
+                <UserCheck className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Select
+                  value={selectedRole}
+                  onValueChange={(value) => {
+                    setSelectedRole(value);
+                    // Обновляем значение в форме
+                    const event = { target: { name: "role", value } };
+                    register("role").onChange(event);
+                  }}
+                >
+                  <SelectTrigger className="pl-10">
+                    <SelectValue placeholder="Выберите роль" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="client">Клиент</SelectItem>
+                    <SelectItem value="manager">Менеджер</SelectItem>
+                    <SelectItem value="technician">Техник</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {errors.role && (
+                <p className="text-sm text-destructive">{errors.role.message}</p>
               )}
             </div>
 

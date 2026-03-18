@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
-import { authStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore";
 import { cn } from "@/utils";
 
 import { Menu, User, LogOut, ChevronDown, Building2 } from "lucide-react";
@@ -17,7 +18,7 @@ interface HeaderProps {
 
 export const Header = ({ onMenuClick }: HeaderProps) => {
   const navigate = useNavigate();
-  const { user, logout, isAuthenticated } = authStore();
+  const { user, logout, isAuthenticated } = useAuthStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const handleLogout = () => {
@@ -33,8 +34,13 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
     setIsDropdownOpen(false);
   };
 
+  const handleLogoClick = () => {
+    navigate("/");
+    setIsDropdownOpen(false);
+  };
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background px-4 lg:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 lg:px-6">
       {/* Left: Menu button (mobile) + Logo */}
       <div className="flex items-center gap-4">
         <button
@@ -44,16 +50,16 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
         >
           <Menu className="h-5 w-5" />
         </button>
-        
-        <div className="flex items-center gap-2">
+
+        <button onClick={handleLogoClick} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <Building2 className="h-6 w-6 text-primary" />
           <span className="font-semibold text-lg hidden sm:inline-block">
             Dental Lab
           </span>
-        </div>
+        </button>
       </div>
 
-      {/* Right: Auth buttons or User dropdown */}
+      {/* Right: Navigation or User dropdown */}
       <div className="flex items-center gap-4">
         {isAuthenticated && user ? (
           <div className="relative">
@@ -78,7 +84,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
                   className="fixed inset-0 z-10"
                   onClick={() => setIsDropdownOpen(false)}
                 />
-                
+
                 {/* Menu */}
                 <div className="absolute right-0 mt-2 w-48 rounded-lg border bg-popover py-1 shadow-lg z-20">
                   <button
@@ -100,9 +106,30 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
             )}
           </div>
         ) : (
+          <nav className="hidden md:flex items-center gap-6">
+            <Link to="/services" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Услуги
+            </Link>
+            <Link to="/calculator" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Калькулятор
+            </Link>
+            <Link to="/portfolio" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Портфолио
+            </Link>
+            <Link to="/articles" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Статьи
+            </Link>
+            <Link to="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              FAQ
+            </Link>
+          </nav>
+        )}
+
+        {/* Auth buttons - only show on public pages */}
+        {!isAuthenticated && (
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => navigate("/login")}
             >

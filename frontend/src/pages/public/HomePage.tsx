@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Star, Clock, Award, TrendingUp, ChevronRight, Building2 } from "lucide-react";
 import { toast } from "react-toastify";
+import { cn } from "@/utils";
 
 // =============================================================================
 // Типы
@@ -21,7 +22,7 @@ interface ServiceCategory {
 
 interface Technician {
   id: number;
-  user: {
+  user?: {
     first_name?: string;
     last_name?: string;
   };
@@ -66,13 +67,13 @@ export const HomePage = () => {
           apiClient.get<ServiceCategory[]>("/services/categories"),
           apiClient.get<Technician[]>("/technicians?limit=3"),
           apiClient.get<Promotion[]>("/promotions"),
-          apiClient.get<Review[]>("/reviews?limit=5"),
+          apiClient.get<{ items: Review[]; total: number }>("/reviews?limit=5"),
         ]);
 
         setCategories(categoriesRes.data);
         setTechnicians(techniciansRes.data);
         setPromotions(promotionsRes.data);
-        setReviews(reviewsRes.data);
+        setReviews(reviewsRes.data.items || []);
       } catch (error) {
         toast.error("Ошибка загрузки данных");
         console.error(error);
@@ -218,12 +219,12 @@ export const HomePage = () => {
                     <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                         <span className="text-lg font-semibold text-primary">
-                          {tech.user.first_name?.[0]}{tech.user.last_name?.[0]}
+                          {tech.user?.first_name?.[0]}{tech.user?.last_name?.[0]}
                         </span>
                       </div>
                       <div>
                         <CardTitle className="text-lg">
-                          {tech.user.first_name} {tech.user.last_name}
+                          {tech.user?.first_name} {tech.user?.last_name}
                         </CardTitle>
                         {tech.specialization && (
                           <CardDescription>{tech.specialization}</CardDescription>

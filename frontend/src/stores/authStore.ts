@@ -8,7 +8,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
-  
+
   // Actions
   login: (tokens: { access_token: string; refresh_token: string }, user: User) => void;
   logout: () => void;
@@ -17,7 +17,7 @@ interface AuthState {
   clearAuth: () => void;
 }
 
-export const authStore = create<AuthState>()(
+export const useAuthStore = create<AuthState>()(
   devtools(
     persist(
       (set, get) => ({
@@ -25,14 +25,14 @@ export const authStore = create<AuthState>()(
         accessToken: null,
         refreshToken: null,
         isAuthenticated: false,
-        
+
         login: (tokens, user) => set({
           user,
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
           isAuthenticated: true,
         }),
-        
+
         logout: () => {
           set({
             user: null,
@@ -43,18 +43,18 @@ export const authStore = create<AuthState>()(
           // Очищаем localStorage только для auth-storage
           localStorage.removeItem("auth-storage");
         },
-        
+
         setTokens: (accessToken, refreshToken) => set((state) => ({
           ...state,
           accessToken,
           refreshToken,
         })),
-        
+
         updateUser: (userData) => set((state) => ({
           ...state,
           user: state.user ? { ...state.user, ...userData } : null,
         })),
-        
+
         clearAuth: () => set({
           user: null,
           accessToken: null,
@@ -75,8 +75,10 @@ export const authStore = create<AuthState>()(
   ),
 );
 
-// Хелпер для проверки авторизации
+// Экспортируем store для использования без хука (например в router)
+export const authStore = useAuthStore;
+
+// Хелперы для проверки авторизации
 export const selectIsAuthenticated = (state: AuthState) => state.isAuthenticated;
 export const selectUser = (state: AuthState) => state.user;
 export const selectUserRole = (state: AuthState) => state.user?.role ?? null;
-

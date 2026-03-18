@@ -1,8 +1,9 @@
 from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
-from backend.app.database import Base
+from ..database import Base
 
 
 class Review(Base):
@@ -17,4 +18,8 @@ class Review(Base):
     is_moderated = Column(Boolean, default=False, nullable=False)
     is_published = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    client = relationship("Client", back_populates="reviews")
+    order = relationship("Order", back_populates="reviews")
 

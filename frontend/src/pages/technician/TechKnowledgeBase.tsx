@@ -12,13 +12,15 @@ export const TechKnowledgeBase = () => {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [selectedArticle, setSelectedArticle] = useState<number | null>(null);
 
-  const { data: articles, isLoading } = useQuery({
+  const { data: articlesData, isLoading } = useQuery({
     queryKey: ["knowledge-base", search, filters],
     queryFn: () => getKnowledgeBase({
       search: search || undefined,
       category: filters.category || undefined,
     }),
   });
+
+  const articles = articlesData?.items || [];
 
   const { data: fullArticle } = useQuery({
     queryKey: ["knowledge-article", selectedArticle],
@@ -67,7 +69,7 @@ export const TechKnowledgeBase = () => {
             </Card>
           ))}
         </div>
-      ) : !articles?.length ? (
+      ) : !articlesData || !articles.length ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <p>Статьи не найдены</p>
@@ -89,7 +91,7 @@ export const TechKnowledgeBase = () => {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground line-clamp-3">
-                  {article.content.slice(0, 150)}...
+                  {article.content?.slice(0, 150) || "Нет описания"}...
                 </p>
                 {article.tags && article.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-4">

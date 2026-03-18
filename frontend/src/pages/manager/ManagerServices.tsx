@@ -31,7 +31,9 @@ export const ManagerServices = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
 
-  const { data: services } = useQuery({ queryKey: ["manager-services"], queryFn: getServices });
+  const { data: servicesData } = useQuery({ queryKey: ["manager-services"], queryFn: getServices });
+
+  const services = servicesData?.items || [];
 
   const createMutation = useMutation({
     mutationFn: createService,

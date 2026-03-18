@@ -5,20 +5,19 @@ from pathlib import Path
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-# Добавляем корень проекта в path для импортов
-project_root = str(Path(__file__).resolve().parent.parent.parent)
-sys.path.insert(0, project_root)
+# Добавляем backend в path для импортов
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from backend.app.config import settings
-from backend.app.database import Base
+from app.config import settings
+from app.database import Base
 
 # Импортируем модели напрямую для Alembic
-from backend.app.models.user import User, UserRole, LoyaltyTier  # noqa: F401
-from backend.app.models.client import Client  # noqa: F401
-from backend.app.models.technician import Technician  # noqa: F401
-from backend.app.models.service import Service, ServiceCategory  # noqa: F401
-from backend.app.models.material import Material  # noqa: F401
-from backend.app.models.order import (  # noqa: F401
+from app.models.user import User, UserRole, LoyaltyTier  # noqa: F401
+from app.models.client import Client  # noqa: F401
+from app.models.technician import Technician  # noqa: F401
+from app.models.service import Service, ServiceCategory  # noqa: F401
+from app.models.material import Material  # noqa: F401
+from app.models.order import (  # noqa: F401
     Order,
     OrderItem,
     OrderStatus,
@@ -28,11 +27,11 @@ from backend.app.models.order import (  # noqa: F401
     MaterialRequest,
     MaterialRequestStatus,
 )
-from backend.app.models.review import Review  # noqa: F401
-from backend.app.models.article import Article  # noqa: F401
-from backend.app.models.promotion import Promotion, PromotionAppliesTo  # noqa: F401
-from backend.app.models.knowledge import KnowledgeBase  # noqa: F401
-from backend.app.models.logging import ActionLog  # noqa: F401
+from app.models.review import Review  # noqa: F401
+from app.models.article import Article  # noqa: F401
+from app.models.promotion import Promotion, PromotionAppliesTo  # noqa: F401
+from app.models.knowledge import KnowledgeBase  # noqa: F401
+from app.models.logging import ActionLog  # noqa: F401
 
 config = context.config
 
@@ -57,7 +56,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = settings.SQLALCHEMY_DATABASE_URL
+  # configuration["sqlalchemy.url"] = settings.SQLALCHEMY_DATABASE_URL
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",

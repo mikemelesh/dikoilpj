@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY
 
-from backend.app.database import Base
+from ..database import Base
 
 
 class KnowledgeBase(Base):

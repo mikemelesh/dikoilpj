@@ -3,14 +3,14 @@ import { Outlet } from "react-router-dom";
 
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
-import { authStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore";
 
 // =============================================================================
 // Компонент Layout
 // =============================================================================
 
 export const Layout = () => {
-  const { isAuthenticated } = authStore();
+  const { isAuthenticated } = useAuthStore();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Если не авторизован — показываем только Header + контент

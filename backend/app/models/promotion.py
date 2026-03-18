@@ -3,7 +3,7 @@ from enum import Enum as PyEnum
 
 from sqlalchemy import Boolean, Column, Date, Enum, Float, Integer, String
 
-from backend.app.database import Base
+from ..database import Base
 
 
 class PromotionAppliesTo(str, PyEnum):

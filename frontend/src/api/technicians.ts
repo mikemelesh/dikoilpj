@@ -59,12 +59,18 @@ export const updateTechnicianProfile = async (data: UpdateTechnicianProfileData)
 /**
  * Получение заказов техника
  */
-export const getTechnicianOrders = async (params?: { status?: string; page?: number; limit?: number }) => {
+export const getTechnicianOrders = async (params?: { status?: string | string[]; page?: number; limit?: number }) => {
   const queryParams = new URLSearchParams();
-  if (params?.status) queryParams.append("status", params.status);
+  if (params?.status) {
+    if (Array.isArray(params.status)) {
+      params.status.forEach(s => queryParams.append("status", s));
+    } else {
+      queryParams.append("status", params.status);
+    }
+  }
   if (params?.page) queryParams.append("page", String(params.page));
   if (params?.limit) queryParams.append("limit", String(params.limit));
-  
+
   const response = await apiClient.get(`/technicians/me/orders?${queryParams}`);
   return response.data;
 };
@@ -72,8 +78,12 @@ export const getTechnicianOrders = async (params?: { status?: string; page?: num
 /**
  * Получение списка материалов
  */
-export const getMaterials = async (): Promise<Material[]> => {
-  const response = await apiClient.get<Material[]>("/materials");
+export const getMaterials = async (params?: { search?: string; low_stock_only?: boolean }): Promise<{ items: Material[]; total: number }> => {
+  const queryParams = new URLSearchParams();
+  if (params?.search) queryParams.append("search", params.search);
+  if (params?.low_stock_only) queryParams.append("low_stock_only", String(params.low_stock_only));
+
+  const response = await apiClient.get(`/materials?${queryParams}`);
   return response.data;
 };
 
@@ -88,20 +98,20 @@ export const createMaterialRequest = async (data: CreateMaterialRequestData): Pr
 /**
  * Получение запросов на материалы техника
  */
-export const getMyMaterialRequests = async (): Promise<MaterialRequest[]> => {
-  const response = await apiClient.get<MaterialRequest[]>("/materials/requests?technician_me=true");
+export const getMyMaterialRequests = async (): Promise<{ items: MaterialRequest[]; total: number }> => {
+  const response = await apiClient.get("/materials/requests?technician_me=true");
   return response.data;
 };
 
 /**
  * Получение базы знаний
  */
-export const getKnowledgeBase = async (params?: { category?: string; search?: string }): Promise<KnowledgeBase[]> => {
+export const getKnowledgeBase = async (params?: { category?: string; search?: string }): Promise<{ items: KnowledgeBase[]; total: number }> => {
   const queryParams = new URLSearchParams();
   if (params?.category) queryParams.append("category", params.category);
   if (params?.search) queryParams.append("search", params.search);
-  
-  const response = await apiClient.get<KnowledgeBase[]>(`/knowledge-base?${queryParams}`);
+
+  const response = await apiClient.get(`/knowledge-base?${queryParams}`);
   return response.data;
 };
 
@@ -109,6 +119,6 @@ export const getKnowledgeBase = async (params?: { category?: string; search?: st
  * Получение статьи базы знаний
  */
 export const getKnowledgeArticle = async (id: number): Promise<KnowledgeBase> => {
-  const response = await apiClient.get<KnowledgeBase>(`/knowledge-base/${id}`);
+  const response = await apiClient.get(`/knowledge-base/${id}`);
   return response.data;
 };

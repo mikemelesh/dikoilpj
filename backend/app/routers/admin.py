@@ -4,7 +4,7 @@
 import math
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -46,25 +46,35 @@ async def get_action_logs(
     Получить логи действий пользователей.
     Доступно: admin.
     """
+    import uuid
+    from ..models.logging import ActionLog
+
     query = db.query(ActionLog).options(
         joinedload(ActionLog.user)
     )
-    
+
     # Фильтры
     if user_id:
-        query = query.filter(ActionLog.user_id == user_id)
+        # Проверяем, является ли user_id корректным UUID
+        try:
+            uuid.UUID(user_id)
+            query = query.filter(ActionLog.user_id == user_id)
+        except ValueError:
+            # Если не UUID, ищем по email
+            query = query.join(ActionLog.user).filter(User.email.ilike(f"%{user_id}%"))
+    
     if action_type:
         query = query.filter(ActionLog.action_type == action_type)
     if date_from:
         query = query.filter(ActionLog.created_at >= date_from)
     if date_to:
         query = query.filter(ActionLog.created_at <= date_to)
-    
+
     total = query.count()
     pages = math.ceil(total / limit) if total > 0 else 0
     offset = (page - 1) * limit
     logs = query.order_by(ActionLog.created_at.desc()).offset(offset).limit(limit).all()
-    
+
     items = [
         ActionLogResponse(
             id=log.id,
@@ -79,7 +89,7 @@ async def get_action_logs(
         )
         for log in logs
     ]
-    
+
     return ActionLogListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
 
 
@@ -272,7 +282,7 @@ async def create_backup(
     backup_dir.mkdir(parents=True, exist_ok=True)
     
     # Генерируем имя файла
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"backup_{timestamp}.sql"
     filepath = backup_dir / filename
     
@@ -335,7 +345,7 @@ async def create_backup(
         return BackupResponse(
             filename=filename,
             size=file_size,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
         )
         
     except FileNotFoundError:
@@ -353,3 +363,66 @@ async def create_backup(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка создания бэкапа: {str(e)}"
         )
+
+
+@router.get("/backups", response_model=list[BackupResponse])
+async def get_backups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """
+    Получить список всех бэкапов.
+    Доступно: admin.
+    """
+    backup_dir = Path(settings.BASE_DIR.parent) / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    backups = []
+    for file in backup_dir.glob("backup_*.sql"):
+        stat = file.stat()
+        backups.append(
+            BackupResponse(
+                filename=file.name,
+                size=stat.st_size,
+                created_at=datetime.fromtimestamp(stat.st_mtime),
+            )
+        )
+
+    return sorted(backups, key=lambda x: x.created_at, reverse=True)
+
+
+@router.get("/backups/{filename}")
+async def download_backup(
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """
+    Скачать файл бэкапа.
+    Доступно: admin.
+    """
+    from fastapi.responses import FileResponse
+
+    backup_dir = Path(settings.BASE_DIR.parent) / "backups"
+    filepath = backup_dir / filename
+
+    if not filepath.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Бэкап не найден"
+        )
+
+    # Проверяем что файл находится в директории бэкапов (защита от path traversal)
+    try:
+        filepath.resolve().relative_to(backup_dir.resolve())
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Некорректное имя файла"
+        )
+
+    return FileResponse(
+        path=str(filepath),
+        filename=filename,
+        media_type="application/sql",
+    )

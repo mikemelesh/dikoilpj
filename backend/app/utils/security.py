@@ -2,27 +2,37 @@ import re
 from typing import Optional
 
 from fastapi import Request
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from ..models.logging import ActionLog
 
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-PASSWORD_REGEX = re.compile(r"^(?=.*[A-Za-z])(?=.*\d).{8,}$")
+# Используем bcrypt напрямую вместо passlib
+import bcrypt
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Проверка пароля."""
     if not hashed_password:
         return False
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    if not PASSWORD_REGEX.match(password):
-        raise ValueError("Пароль должен быть не менее 8 символов и содержать буквы и цифры")
-    return pwd_context.hash(password)
+    """Хеширование пароля."""
+    # Валидация пароля
+    if len(password) < 8:
+        raise ValueError("Пароль должен быть не менее 8 символов")
+    if not any(ch.isalpha() for ch in password):
+        raise ValueError("Пароль должен содержать хотя бы одну букву")
+    if not any(ch.isdigit() for ch in password):
+        raise ValueError("Пароль должен содержать хотя бы одну цифру")
+    
+    # Хеширование через bcrypt
+    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    return hashed.decode('utf-8')
 
 
 def log_action(

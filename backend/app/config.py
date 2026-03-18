@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -7,13 +8,14 @@ class Settings:
     PROJECT_NAME: str = "Dental Lab API"
 
     # Security
-    SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "CHANGE_ME_IN_PRODUCTION")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # Database (PostgreSQL by spec; adjust DSN via env in real deployments)
-    SQLALCHEMY_DATABASE_URL: str = (
+    # Database (PostgreSQL) - reads from environment variable or uses default
+    SQLALCHEMY_DATABASE_URL: str = os.getenv(
+        "SQLALCHEMY_DATABASE_URL",
         "postgresql+psycopg2://postgres:postgres@localhost:5432/dental_lab"
     )
 

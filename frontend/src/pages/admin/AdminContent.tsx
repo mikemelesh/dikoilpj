@@ -33,19 +33,31 @@ export const AdminContent = () => {
 
   const createMutation = useMutation({
     mutationFn: (data: ArticleFormData) => apiClient.post("/articles", data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-articles"] }); toast.success("Статья создана"); setModalOpen(false); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["admin-articles"] }); 
+      toast.success("Статья создана"); 
+      setModalOpen(false); 
+    },
     onError: () => toast.error("Ошибка создания"),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: ArticleFormData }) => apiClient.put(`/articles/${id}`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-articles"] }); toast.success("Статья обновлена"); setModalOpen(false); setEditingArticle(null); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["admin-articles"] }); 
+      toast.success("Статья обновлена"); 
+      setModalOpen(false); 
+      setEditingArticle(null); 
+    },
     onError: () => toast.error("Ошибка обновления"),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => apiClient.delete(`/articles/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-articles"] }); toast.success("Статья удалена"); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["admin-articles"] }); 
+      toast.success("Статья удалена"); 
+    },
     onError: () => toast.error("Ошибка удаления"),
   });
 
@@ -84,25 +96,33 @@ export const AdminContent = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {articles?.items?.map((article) => (
-                <TableRow key={article.id}>
-                  <TableCell>
-                    <div>
-                      <p className="font-medium">{article.title}</p>
-                      <p className="text-sm text-muted-foreground">{article.slug}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell><Badge variant="outline">{article.category || "—"}</Badge></TableCell>
-                  <TableCell><Badge variant={article.is_published ? "success" : "secondary"}>{article.is_published ? "Опубликована" : "Черновик"}</Badge></TableCell>
-                  <TableCell>{new Date(article.created_at).toLocaleDateString("ru-RU")}</TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(article)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => { if (confirm("Удалить статью?")) deleteMutation.mutate(article.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                    </div>
+              {articles?.items?.length ? (
+                articles.items.map((article) => (
+                  <TableRow key={article.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{article.title}</p>
+                        <p className="text-sm text-muted-foreground">{article.slug}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell><Badge variant="outline">{article.category || "—"}</Badge></TableCell>
+                    <TableCell><Badge variant={article.is_published ? "success" : "secondary"}>{article.is_published ? "Опубликована" : "Черновик"}</Badge></TableCell>
+                    <TableCell>{new Date(article.created_at).toLocaleDateString("ru-RU")}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(article)}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => { if (confirm("Удалить статью?")) deleteMutation.mutate(article.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    Статьи не найдены
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>

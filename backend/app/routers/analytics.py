@@ -29,8 +29,8 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/orders", response_model=OrderAnalyticsResponse)
 async def get_order_analytics(
-    date_from: date = Query(..., description="Дата начала"),
-    date_to: date = Query(..., description="Дата окончания"),
+    date_from: Optional[date] = Query(None, description="Дата начала"),
+    date_to: Optional[date] = Query(None, description="Дата окончания"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(["manager", "admin"])),
 ):
@@ -38,6 +38,11 @@ async def get_order_analytics(
     Аналитика заказов за период.
     Доступно: manager, admin.
     """
+    # Если даты не указаны, используем последние 30 дней
+    if not date_from or not date_to:
+        date_to = date.today()
+        date_from = date_to - timedelta(days=30)
+    
     if date_to < date_from:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -123,7 +128,7 @@ async def get_revenue_analytics(
         
         by_period.append(RevenueByPeriod(
             date=month_start.strftime("%Y-%m"),
-            amount=amount,
+            amount=float(amount),
         ))
     
     by_period.reverse()
@@ -151,13 +156,13 @@ async def get_revenue_analytics(
         RevenueByCategory(
             category_id=c.id,
             category_name=c.name,
-            total=c.total or Decimal("0.00"),
+            total=float(c.total) if c.total else 0.0,
         )
         for c in categories
     ]
     
     return RevenueAnalyticsResponse(
-        total=total,
+        total=float(total),
         by_period=by_period,
         by_service_category=by_category,
     )

@@ -2,7 +2,7 @@
 Роутеры для управления материалами и запросами.
 """
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -249,14 +249,15 @@ async def create_material_request(
 async def get_material_requests(
     status_filter: Optional[str] = Query(None, alias="status"),
     technician_id: Optional[int] = Query(None),
+    technician_me: bool = Query(False, description="Получить запросы текущего техника"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["manager", "admin"])),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     Получить список запросов материалов.
-    Доступно: manager, admin.
+    Доступно: manager, admin (все запросы), technician (свои запросы).
     """
     # Валидация статуса
     valid_statuses = ["pending", "approved", "rejected", "issued"]
@@ -265,18 +266,33 @@ async def get_material_requests(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Недопустимый статус. Допустимые: {', '.join(valid_statuses)}"
         )
-    
+
     query = db.query(MaterialRequest).options(
         joinedload(MaterialRequest.technician).joinedload(Technician.user),
         joinedload(MaterialRequest.material),
         joinedload(MaterialRequest.resolver),
     )
-    
+
+    # Если technician и technician_me=true - показываем только его запросы
+    if current_user.role == UserRole.TECHNICIAN and technician_me:
+        technician = db.query(Technician).filter(Technician.user_id == current_user.id).first()
+        if technician:
+            query = query.filter(MaterialRequest.technician_id == technician.id)
+        else:
+            return MaterialRequestListResponse(items=[], total=0, page=page, limit=limit, pages=0)
+    # Если manager/admin - можно фильтровать по technician_id
+    elif current_user.role in [UserRole.MANAGER, UserRole.ADMIN]:
+        if technician_id:
+            query = query.filter(MaterialRequest.technician_id == technician_id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав"
+        )
+
     # Фильтры
     if status_filter:
         query = query.filter(MaterialRequest.status == status_filter)
-    if technician_id:
-        query = query.filter(MaterialRequest.technician_id == technician_id)
     
     # Пагинация
     total = query.count()
@@ -346,7 +362,7 @@ async def update_material_request(
     db_request.status = new_status
     db_request.comment = request_data.comment
     db_request.resolved_by = current_user.id
-    db_request.resolved_at = datetime.utcnow()
+    db_request.resolved_at = datetime.now(timezone.utc)
     
     # Если одобрено — списываем материал
     if new_status == "approved":

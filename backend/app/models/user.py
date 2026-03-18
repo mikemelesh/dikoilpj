@@ -6,7 +6,7 @@ from sqlalchemy import Boolean, Column, DateTime, Enum, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
-from backend.app.database import Base
+from ..database import Base
 
 
 class UserRole(str, PyEnum):
@@ -46,4 +46,5 @@ class User(Base):
     client_profile = relationship("Client", back_populates="user", uselist=False)
     technician_profile = relationship("Technician", back_populates="user", uselist=False)
     managed_orders = relationship("Order", back_populates="manager", foreign_keys="Order.manager_id")
+    action_logs = relationship("ActionLog", back_populates="user")
 

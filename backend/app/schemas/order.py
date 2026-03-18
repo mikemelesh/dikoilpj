@@ -126,9 +126,9 @@ class OrderResponse(BaseModel):
     manager_id: Optional[str] = None
     status: str
     priority: str
-    total_price: Decimal
-    discount_amount: Decimal
-    final_price: Decimal
+    total_price: float
+    discount_amount: float
+    final_price: float
     notes: Optional[str] = None
     deadline: Optional[date] = None
     created_at: datetime
@@ -142,7 +142,7 @@ class OrderResponse(BaseModel):
 
 class OrderListResponse(BaseModel):
     """Схема списка заказов с пагинацией."""
-    items: List[OrderResponse]
+    items: List[OrderSummaryResponse]
     total: int
     page: int
     limit: int
@@ -157,6 +157,8 @@ class OrderSummaryResponse(BaseModel):
     order_number: str
     status: str
     priority: str
-    final_price: Decimal
+    final_price: float
     created_at: datetime
     deadline: Optional[date] = None
+    technician_id: Optional[int] = None
+    technician_name: Optional[str] = None

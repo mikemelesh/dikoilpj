@@ -3,9 +3,9 @@ Pydantic схемы для клиентов и техников.
 """
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # =============================================================================
@@ -33,7 +33,7 @@ class ClientOrderSummary(BaseModel):
     id: str
     order_number: str
     status: str
-    final_price: Decimal
+    final_price: float
     created_at: datetime
 
 
@@ -113,12 +113,29 @@ class TechnicianDetailResponse(BaseModel):
 
 class TechnicianStatsResponse(BaseModel):
     """Статистика техника."""
-    total_orders: int
-    completed_orders: int
-    in_progress_orders: int
+    total_orders: int = 0
+    completed_orders: int = 0
+    in_progress_orders: int = 0
     average_completion_days: Optional[float] = None
-    rating: float
-    total_earnings: Decimal
+    rating: float = 0.0
+    total_earnings: float = 0.0
+    monthly_completed: List[Dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator('rating', 'total_earnings', mode='before')
+    @classmethod
+    def convert_decimal_to_float(cls, v):
+        if v is None:
+            return 0.0
+        if isinstance(v, Decimal):
+            return float(v)
+        return float(v)
+
+    @field_validator('total_orders', 'completed_orders', 'in_progress_orders', mode='before')
+    @classmethod
+    def convert_to_int(cls, v):
+        if v is None:
+            return 0
+        return int(v)
 
 
 class TechnicianPortfolioResponse(BaseModel):

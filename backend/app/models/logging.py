@@ -1,8 +1,9 @@
 from datetime import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
 
-from backend.app.database import Base
+from ..database import Base
 
 
 class ActionLog(Base):
@@ -17,4 +18,6 @@ class ActionLog(Base):
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="action_logs")
 

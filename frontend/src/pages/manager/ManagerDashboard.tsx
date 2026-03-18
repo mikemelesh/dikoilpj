@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 
@@ -16,16 +17,17 @@ export const ManagerDashboard = () => {
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
 
-  // KPI данные
-  const { data: analytics } = useQuery({
+  // KPI данные - получаем все заказы за месяц
+  const { data: analytics, isLoading: analyticsLoading } = useQuery({
     queryKey: ["manager-analytics", monthStart],
     queryFn: () => getOrderAnalytics({ date_from: monthStart }),
+    retry: 2,
   });
 
   // Новые заказы (ожидают подтверждения)
   const { data: newOrdersData } = useQuery({
     queryKey: ["manager-new-orders"],
-    queryFn: () => getOrders({ status: "new", limit: 10 }),
+    queryFn: () => getOrders({ status: ["new", "confirmed"], limit: 10 }),
   });
 
   // Заявки на материалы (pending)
@@ -39,6 +41,8 @@ export const ManagerDashboard = () => {
     queryKey: ["technicians-list"],
     queryFn: getTechnicians,
   });
+
+  console.log("Manager Dashboard Data:", { analytics, newOrdersData, materialRequests });
 
   const assignMutation = useMutation({
     mutationFn: ({ orderId, technicianId }: { orderId: string; technicianId: number }) =>
@@ -70,7 +74,7 @@ export const ManagerDashboard = () => {
   });
 
   const newOrders = newOrdersData?.items || [];
-  const pendingRequests = materialRequests || [];
+  const pendingRequests = materialRequests?.items || [];
 
   const revenue = analytics?.by_status ? 
     new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(
@@ -182,7 +186,7 @@ export const ManagerDashboard = () => {
                       <option value="">Назначить техника</option>
                       {technicians?.filter((t) => t.is_available).map((t) => (
                         <option key={t.id} value={t.id}>
-                          {t.user.first_name} {t.user.last_name}
+                          {t.user?.first_name} {t.user?.last_name}
                         </option>
                       ))}
                     </select>
@@ -220,7 +224,7 @@ export const ManagerDashboard = () => {
                   <div>
                     <p className="font-medium">{req.material?.name || `Материал #${req.material_id}`}</p>
                     <p className="text-sm text-muted-foreground">
-                      {req.quantity_requested} {req.material?.unit || "шт"} • {req.technician?.user.first_name} {req.technician?.user.last_name}
+                      {req.quantity_requested} {req.material?.unit || "шт"} • {req.technician?.user?.first_name} {req.technician?.user?.last_name}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

@@ -22,7 +22,7 @@ export const ClientOrders = () => {
     queryFn: () => getOrders({
       page,
       limit,
-      status: filters.status,
+      status: filters.status || undefined,
       date_from: filters.date_from,
       date_to: filters.date_to,
     }),

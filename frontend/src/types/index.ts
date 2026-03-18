@@ -40,6 +40,8 @@ export interface Technician {
   id: number
   user_id: string
   user?: User
+  first_name?: string  // Для API техников
+  last_name?: string   // Для API техников
   specialization?: string
   experience_years: number
   rating: number

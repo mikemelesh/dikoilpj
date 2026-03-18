@@ -19,7 +19,7 @@ export const TechOrders = () => {
     queryFn: () => getTechnicianOrders({
       page,
       limit,
-      status: filters.status,
+      status: filters.status || undefined,
     }),
   });
 
