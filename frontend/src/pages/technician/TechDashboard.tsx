@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { authStore } from "@/stores/authStore";
+import { useAuthStore } from "@/stores/authStore";
 import { getTechnicianOrders, getMyMaterialRequests, getTechnicianStats } from "@/api/technicians";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,7 @@ import { Clock, Package, TrendingUp, Star, AlertCircle, Plus } from "lucide-reac
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 export const TechDashboard = () => {
-  const { user } = authStore();
+  const { user } = useAuthStore();
 
   // Заказы в работе - используем правильный статус
   const { data: ordersData, isLoading: ordersLoading } = useQuery({
@@ -39,13 +38,13 @@ export const TechDashboard = () => {
 
   const orders = ordersData?.items || [];
 
-  console.log("Tech Dashboard Debug:", { 
-    user, 
-    stats, 
-    statsError, 
-    orders, 
-    ordersLoading, 
-    statsLoading 
+  console.log("Tech Dashboard Debug:", {
+    user,
+    stats,
+    statsError,
+    orders,
+    ordersLoading,
+    statsLoading
   });
 
   // Заказы с дедлайном сегодня или просроченные

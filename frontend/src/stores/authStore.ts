@@ -3,17 +3,39 @@ import { persist, devtools } from "zustand/middleware";
 
 import type { UserRole, User } from "@/types";
 
+interface ClientProfile {
+  id: number;
+  clinic_name?: string;
+  address?: string;
+  discount_percent: number;
+  loyalty_tier: string;
+  total_orders: number;
+}
+
+interface TechnicianProfile {
+  id: number;
+  specialization?: string;
+  experience_years: number;
+  rating: number;
+  completed_orders: number;
+}
+
+interface ExtendedUser extends User {
+  client_profile?: ClientProfile;
+  technician_profile?: TechnicianProfile;
+}
+
 interface AuthState {
-  user: User | null;
+  user: ExtendedUser | null;
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
 
   // Actions
-  login: (tokens: { access_token: string; refresh_token: string }, user: User) => void;
+  login: (tokens: { access_token: string; refresh_token: string }, user: ExtendedUser) => void;
   logout: () => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
-  updateUser: (user: Partial<User>) => void;
+  updateUser: (user: Partial<ExtendedUser>) => void;
   clearAuth: () => void;
 }
 

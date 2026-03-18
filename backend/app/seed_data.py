@@ -310,33 +310,33 @@ def create_services(db: Session) -> dict:
     
     services_data = [
         # Несъемные протезы
-        {"name": "Коронка металлокерамическая", "category": "Несъемные протезы", "base_price": 15000, "unit": "шт", "duration_days": 7},
-        {"name": "Коронка циркониевая", "category": "Несъемные протезы", "base_price": 25000, "unit": "шт", "duration_days": 10},
-        {"name": "Коронка E-max", "category": "Несъемные протезы", "base_price": 28000, "unit": "шт", "duration_days": 7},
-        {"name": "Винир керамический", "category": "Несъемные протезы", "base_price": 30000, "unit": "шт", "duration_days": 14},
-        {"name": "Мостовидный протез (3 ед)", "category": "Несъемные протезы", "base_price": 45000, "unit": "работа", "duration_days": 14},
-        
+        {"name": "Коронка металлокерамическая", "category": "Несъемные протезы", "base_price": 525, "unit": "шт", "duration_days": 7},
+        {"name": "Коронка циркониевая", "category": "Несъемные протезы", "base_price": 875, "unit": "шт", "duration_days": 10},
+        {"name": "Коронка E-max", "category": "Несъемные протезы", "base_price": 980, "unit": "шт", "duration_days": 7},
+        {"name": "Винир керамический", "category": "Несъемные протезы", "base_price": 1050, "unit": "шт", "duration_days": 14},
+        {"name": "Мостовидный протез (3 ед)", "category": "Несъемные протезы", "base_price": 1575, "unit": "работа", "duration_days": 14},
+
         # Съемные протезы
-        {"name": "Частичный съемный протез", "category": "Съемные протезы", "base_price": 20000, "unit": "шт", "duration_days": 10},
-        {"name": "Полный съемный протез", "category": "Съемные протезы", "base_price": 35000, "unit": "челюсть", "duration_days": 14},
-        {"name": "Бюгельный протез", "category": "Съемные протезы", "base_price": 40000, "unit": "шт", "duration_days": 14},
-        {"name": "Протез на аттачменах", "category": "Съемные протезы", "base_price": 55000, "unit": "шт", "duration_days": 21},
-        
+        {"name": "Частичный съемный протез", "category": "Съемные протезы", "base_price": 700, "unit": "шт", "duration_days": 10},
+        {"name": "Полный съемный протез", "category": "Съемные протезы", "base_price": 1225, "unit": "челюсть", "duration_days": 14},
+        {"name": "Бюгельный протез", "category": "Съемные протезы", "base_price": 1400, "unit": "шт", "duration_days": 14},
+        {"name": "Протез на аттачменах", "category": "Съемные протезы", "base_price": 1925, "unit": "шт", "duration_days": 21},
+
         # Имплантация
-        {"name": "Абатмент стандартный", "category": "Имплантация", "base_price": 12000, "unit": "шт", "duration_days": 7},
-        {"name": "Абатмент индивидуальный", "category": "Имплантация", "base_price": 20000, "unit": "шт", "duration_days": 14},
-        {"name": "Коронка на имплант", "category": "Имплантация", "base_price": 35000, "unit": "шт", "duration_days": 14},
-        {"name": "Временная коронка на имплант", "category": "Имплантация", "base_price": 8000, "unit": "шт", "duration_days": 3},
-        
+        {"name": "Абатмент стандартный", "category": "Имплантация", "base_price": 420, "unit": "шт", "duration_days": 7},
+        {"name": "Абатмент индивидуальный", "category": "Имплантация", "base_price": 700, "unit": "шт", "duration_days": 14},
+        {"name": "Коронка на имплант", "category": "Имплантация", "base_price": 1225, "unit": "шт", "duration_days": 14},
+        {"name": "Временная коронка на имплант", "category": "Имплантация", "base_price": 280, "unit": "шт", "duration_days": 3},
+
         # Ортодонтия
-        {"name": "Ретенционная пластинка", "category": "Ортодонтия", "base_price": 10000, "unit": "шт", "duration_days": 7},
-        {"name": "Каппа ретенционная", "category": "Ортодонтия", "base_price": 5000, "unit": "челюсть", "duration_days": 3},
-        {"name": "Элайнеры (комплект)", "category": "Ортодонтия", "base_price": 150000, "unit": "комплект", "duration_days": 30},
-        
+        {"name": "Ретенционная пластинка", "category": "Ортодонтия", "base_price": 350, "unit": "шт", "duration_days": 7},
+        {"name": "Каппа ретенционная", "category": "Ортодонтия", "base_price": 175, "unit": "челюсть", "duration_days": 3},
+        {"name": "Элайнеры (комплект)", "category": "Ортодонтия", "base_price": 5250, "unit": "комплект", "duration_days": 30},
+
         # Дополнительные услуги
-        {"name": "Ремонт протеза", "category": "Дополнительные услуги", "base_price": 5000, "unit": "работа", "duration_days": 3},
-        {"name": "Перебазировка протеза", "category": "Дополнительные услуги", "base_price": 7000, "unit": "работа", "duration_days": 5},
-        {"name": "Изготовление воскового шаблона", "category": "Дополнительные услуги", "base_price": 3000, "unit": "шт", "duration_days": 2},
+        {"name": "Ремонт протеза", "category": "Дополнительные услуги", "base_price": 175, "unit": "работа", "duration_days": 3},
+        {"name": "Перебазировка протеза", "category": "Дополнительные услуги", "base_price": 245, "unit": "работа", "duration_days": 5},
+        {"name": "Изготовление воскового шаблона", "category": "Дополнительные услуги", "base_price": 105, "unit": "шт", "duration_days": 2},
     ]
     
     services = {}
@@ -577,7 +577,7 @@ def create_orders(db: Session, clients: dict, technicians: dict, services: dict,
             db.add(status_history)
         
         orders.append(order)
-        print(f"  ✅ Заказ {order.order_number}: {order.status.value} - {final_price} ₽")
+        print(f"  ✅ Заказ {order.order_number}: {order.status.value} - {final_price} BYN")
     
     db.commit()
     print(f"  ✅ Создано {len(orders)} заказов")
@@ -589,14 +589,14 @@ def create_materials(db: Session) -> list:
     print("\n🧪 Создание материалов...")
     
     materials_data = [
-        {"name": "Диоксид циркония", "unit": "г", "quantity": 500, "min_quantity": 100, "price_per_unit": 150, "supplier": "Zirkonzahn"},
-        {"name": "Керамическая масса", "unit": "г", "quantity": 200, "min_quantity": 50, "price_per_unit": 80, "supplier": "Ivoclar"},
-        {"name": "Кобальт-хром сплав", "unit": "г", "quantity": 300, "min_quantity": 80, "price_per_unit": 120, "supplier": "Bego"},
-        {"name": "Акриловая смола", "unit": "мл", "quantity": 1000, "min_quantity": 200, "price_per_unit": 25, "supplier": "Kulzer"},
-        {"name": "Воск моделировочный", "unit": "г", "quantity": 150, "min_quantity": 30, "price_per_unit": 15, "supplier": "Kerr"},
-        {"name": "Фоторезин для 3D печати", "unit": "мл", "quantity": 80, "min_quantity": 100, "price_per_unit": 45, "supplier": "Formlabs"},  # Низкий остаток
-        {"name": "Цемент фиксирующий", "unit": "мл", "quantity": 250, "min_quantity": 50, "price_per_unit": 35, "supplier": "3M"},
-        {"name": "Силикон для форм", "unit": "мл", "quantity": 400, "min_quantity": 100, "price_per_unit": 55, "supplier": "Zhermack"},
+        {"name": "Диоксид циркония", "unit": "г", "quantity": 500, "min_quantity": 100, "price_per_unit": 5.25, "supplier": "Zirkonzahn"},
+        {"name": "Керамическая масса", "unit": "г", "quantity": 200, "min_quantity": 50, "price_per_unit": 2.80, "supplier": "Ivoclar"},
+        {"name": "Кобальт-хром сплав", "unit": "г", "quantity": 300, "min_quantity": 80, "price_per_unit": 4.20, "supplier": "Bego"},
+        {"name": "Акриловая смола", "unit": "мл", "quantity": 1000, "min_quantity": 200, "price_per_unit": 0.88, "supplier": "Kulzer"},
+        {"name": "Воск моделировочный", "unit": "г", "quantity": 150, "min_quantity": 30, "price_per_unit": 0.53, "supplier": "Kerr"},
+        {"name": "Фоторезин для 3D печати", "unit": "мл", "quantity": 80, "min_quantity": 100, "price_per_unit": 1.58, "supplier": "Formlabs"},  # Низкий остаток
+        {"name": "Цемент фиксирующий", "unit": "мл", "quantity": 250, "min_quantity": 50, "price_per_unit": 1.23, "supplier": "3M"},
+        {"name": "Силикон для форм", "unit": "мл", "quantity": 400, "min_quantity": 100, "price_per_unit": 1.93, "supplier": "Zhermack"},
     ]
     
     materials = []

@@ -101,7 +101,7 @@ export const ManagerServices = () => {
                     </div>
                   </TableCell>
                   <TableCell><Badge variant="outline">{s.category?.name || "Без категории"}</Badge></TableCell>
-                  <TableCell className="text-right">{new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(s.base_price))}</TableCell>
+                  <TableCell className="text-right">{new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(s.base_price))}</TableCell>
                   <TableCell>{s.duration_days} дн.</TableCell>
                   <TableCell><Badge variant={s.is_active ? "default" : "secondary"}>{s.is_active ? "Активна" : "Неактивна"}</Badge></TableCell>
                   <TableCell>

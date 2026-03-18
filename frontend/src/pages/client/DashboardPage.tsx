@@ -108,7 +108,7 @@ export const ClientDashboard = () => {
                     <div className="flex items-center gap-4">
                       <StatusBadge status={order.status} />
                       <span className="font-semibold">
-                        {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(order.final_price)}
+                        {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(order.final_price)}
                       </span>
                     </div>
                   </div>

@@ -204,7 +204,7 @@ export const ManagerOrders = () => {
                       <Badge variant={order.priority === "critical" ? "destructive" : order.priority === "urgent" ? "default" : "secondary"}>
                         {order.priority === "normal" ? "Обычный" : order.priority === "urgent" ? "Срочный" : "Критичный"}
                       </Badge>
-                      <span className="font-semibold">{new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(order.final_price))}</span>
+                      <span className="font-semibold">{new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(order.final_price))}</span>
                       <Link to={`/manager/orders/${order.id}`}><Button variant="ghost" size="sm">Детали</Button></Link>
                       {!order.technician && <Button variant="outline" size="sm" onClick={() => setAssignModal({ orderId: order.id, open: true })}>Назначить</Button>}
                     </div>

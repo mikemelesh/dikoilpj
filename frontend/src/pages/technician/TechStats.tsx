@@ -111,7 +111,7 @@ export const TechStats = () => {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">
-              {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(stats.total_earnings)}
+              {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(stats.total_earnings)}
             </p>
             <p className="text-sm text-muted-foreground">За все выполненные заказы</p>
           </CardContent>

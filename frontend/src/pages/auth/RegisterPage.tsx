@@ -81,10 +81,17 @@ export const RegisterPage = () => {
         throw new Error("Не удалось получить данные пользователя");
       }
 
+      // Объединяем user с профилями (клиент или техник)
+      const userWithProfile = {
+        ...response.user,
+        client_profile: response.client_profile,
+        technician_profile: response.technician_profile,
+      };
+
       // Автологин после регистрации
       login(
         { access_token: response.access_token, refresh_token: response.refresh_token },
-        response.user
+        userWithProfile
       );
 
       toast.success("Регистрация успешна");

@@ -41,9 +41,9 @@ async def get_technicians(
     Получить список всех техников.
     Публичный endpoint (для HomePage).
     """
-    query = db.query(Technician).options(
-        joinedload(Technician.user)
-    )
+    from ..models.user import User
+    
+    query = db.query(Technician).join(User)
 
     if available_only:
         query = query.filter(Technician.is_available == True)

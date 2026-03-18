@@ -54,6 +54,8 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user: UserInfo
+    client_profile: Optional[dict] = None
+    technician_profile: Optional[dict] = None
 
 
 class RefreshRequest(BaseModel):
@@ -170,6 +172,33 @@ async def login(
         access_token = create_access_token({"sub": str(user.id)})
         refresh_token = create_refresh_token({"sub": str(user.id)})
 
+        # Получаем профиль клиента или техника
+        client_profile = None
+        technician_profile = None
+
+        if user.role == UserRole.CLIENT:
+            client = db.query(Client).filter(Client.user_id == user.id).first()
+            if client:
+                client_profile = {
+                    "id": client.id,
+                    "clinic_name": client.clinic_name,
+                    "address": client.address,
+                    "discount_percent": client.discount_percent,
+                    "loyalty_tier": client.loyalty_tier,
+                    "total_orders": client.total_orders,
+                }
+        elif user.role == UserRole.TECHNICIAN:
+            from ..models.technician import Technician
+            technician = db.query(Technician).filter(Technician.user_id == user.id).first()
+            if technician:
+                technician_profile = {
+                    "id": technician.id,
+                    "specialization": technician.specialization,
+                    "experience_years": technician.experience_years,
+                    "rating": technician.rating,
+                    "completed_orders": technician.completed_orders,
+                }
+
         log_action(
             db,
             user_id=str(user.id),
@@ -190,7 +219,9 @@ async def login(
                 last_name=user.last_name,
                 phone=user.phone,
                 role=user.role.value,
-            )
+            ),
+            client_profile=client_profile,
+            technician_profile=technician_profile,
         )
     finally:
         db.close()
@@ -273,6 +304,7 @@ async def get_me(
             client = db.query(Client).filter(Client.user_id == current_user.id).first()
             if client:
                 client_profile = {
+                    "id": client.id,
                     "clinic_name": client.clinic_name,
                     "address": client.address,
                     "discount_percent": client.discount_percent,
@@ -286,6 +318,7 @@ async def get_me(
             technician = db.query(Technician).filter(Technician.user_id == current_user.id).first()
             if technician:
                 technician_profile = {
+                    "id": technician.id,
                     "specialization": technician.specialization,
                     "experience_years": technician.experience_years,
                     "rating": technician.rating,

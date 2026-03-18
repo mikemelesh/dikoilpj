@@ -137,10 +137,10 @@ export const ClientOrderDetail = () => {
                   <TableCell>{item.service?.name || `Услуга #${item.service_id}`}</TableCell>
                   <TableCell className="text-right">{item.quantity}</TableCell>
                   <TableCell className="text-right">
-                    {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(item.unit_price))}
+                    {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(item.unit_price))}
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(item.total_price))}
+                    {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(item.total_price))}
                   </TableCell>
                 </TableRow>
               ))}
@@ -148,10 +148,10 @@ export const ClientOrderDetail = () => {
           </Table>
           <div className="mt-4 flex justify-between items-center pt-4 border-t">
             <span className="text-muted-foreground">
-              {order.discount_amount > 0 && `Скидка: ${new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(order.discount_amount))}`}
+              {order.discount_amount > 0 && `Скидка: ${new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(order.discount_amount))}`}
             </span>
             <span className="text-xl font-bold">
-              Итого: {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(order.final_price))}
+              Итого: {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(order.final_price))}
             </span>
           </div>
         </CardContent>

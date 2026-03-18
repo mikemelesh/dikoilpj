@@ -66,12 +66,17 @@ export const AdminUsers = () => {
               <Label>Поиск</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Поиск по имени, email..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <Input placeholder="Поиск по имени, email..." className="pl-10" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+                {search && (
+                  <button onClick={() => { setSearch(""); setPage(1); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
             <div>
               <Label>Роль</Label>
-              <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                 <option value="">Все</option>
                 <option value="admin">Admin</option>
                 <option value="manager">Manager</option>
@@ -82,7 +87,7 @@ export const AdminUsers = () => {
             </div>
             <div>
               <Label>Статус</Label>
-              <select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+              <select value={activeFilter} onChange={(e) => { setActiveFilter(e.target.value); setPage(1); }} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                 <option value="">Все</option>
                 <option value="true">Активен</option>
                 <option value="false">Неактивен</option>

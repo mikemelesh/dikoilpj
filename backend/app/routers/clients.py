@@ -38,14 +38,15 @@ async def get_clients(
     Получить список клиентов с пагинацией и поиском.
     Доступно: manager, admin.
     """
-    query = db.query(Client).options(
+    # Используем inner join с User, чтобы получить только клиентов с существующими пользователями
+    query = db.query(Client).join(Client.user).options(
         joinedload(Client.user)
     )
-    
+
     # Поиск
     if search:
         search_pattern = f"%{search}%"
-        query = query.join(Client.user).filter(
+        query = query.filter(
             or_(
                 User.first_name.ilike(search_pattern),
                 User.last_name.ilike(search_pattern),
@@ -53,7 +54,7 @@ async def get_clients(
                 Client.clinic_name.ilike(search_pattern),
             )
         )
-    
+
     # Фильтр по уровню лояльности
     if loyalty_tier:
         valid_tiers = ["bronze", "silver", "gold", "platinum"]
@@ -63,16 +64,19 @@ async def get_clients(
                 detail=f"Недопустимый уровень лояльности. Допустимые: {', '.join(valid_tiers)}"
             )
         query = query.filter(Client.loyalty_tier == loyalty_tier.lower())
-    
+
     # Пагинация
     total = query.count()
     pages = math.ceil(total / limit) if total > 0 else 0
     offset = (page - 1) * limit
     clients = query.order_by(Client.total_orders.desc()).offset(offset).limit(limit).all()
-    
+
     # Формируем ответ
     items = []
     for client in clients:
+        # Дополнительная защита от None (хотя inner join должен это предотвратить)
+        if not client.user:
+            continue
         items.append(ClientSummary(
             id=client.id,
             user_id=str(client.user.id),
@@ -86,7 +90,7 @@ async def get_clients(
             discount_percent=client.discount_percent,
             loyalty_points=client.user.loyalty_points,
         ))
-    
+
     return ClientListResponse(
         items=items,
         total=total,
@@ -106,21 +110,28 @@ async def get_client(
     Получить детальную информацию о клиенте + последние 10 заказов.
     Доступно: manager, admin.
     """
-    client = db.query(Client).options(
+    client = db.query(Client).join(Client.user).options(
         joinedload(Client.user)
     ).filter(Client.id == client_id).first()
-    
+
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Клиент не найден"
         )
-    
+
+    # Защита от None user
+    if not client.user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь клиента не найден"
+        )
+
     # Последние 10 заказов
     last_orders = db.query(Order).filter(
         Order.client_id == client_id
     ).order_by(Order.created_at.desc()).limit(10).all()
-    
+
     last_orders_summary = [
         ClientOrderSummary(
             id=str(order.id),
@@ -131,7 +142,7 @@ async def get_client(
         )
         for order in last_orders
     ]
-    
+
     return ClientDetailResponse(
         id=client.id,
         user_id=str(client.user.id),
@@ -161,21 +172,28 @@ async def update_client_loyalty(
     Обновить программу лояльности клиента (tier и discount_percent).
     Доступно: manager, admin.
     """
-    client = db.query(Client).options(
+    client = db.query(Client).join(Client.user).options(
         joinedload(Client.user)
     ).filter(Client.id == client_id).first()
-    
+
     if not client:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Клиент не найден"
         )
-    
+
+    # Защита от None user
+    if not client.user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь клиента не найден"
+        )
+
     update_data = loyalty_data.model_dump(exclude_unset=True)
-    
+
     if "discount_percent" in update_data and update_data["discount_percent"] is not None:
         client.discount_percent = update_data["discount_percent"]
-    
+
     if "loyalty_tier" in update_data and update_data["loyalty_tier"] is not None:
         valid_tiers = ["bronze", "silver", "gold", "platinum"]
         if update_data["loyalty_tier"].lower() not in valid_tiers:
@@ -184,11 +202,11 @@ async def update_client_loyalty(
                 detail=f"Недопустимый уровень лояльности. Допустимые: {', '.join(valid_tiers)}"
             )
         client.loyalty_tier = update_data["loyalty_tier"].lower()
-    
+
     db.add(client)
     db.commit()
     db.refresh(client)
-    
+
     log_action(
         db=db,
         user_id=str(current_user.id),
@@ -197,12 +215,12 @@ async def update_client_loyalty(
         entity_id=str(client.id),
         description=f"Обновлена программа лояльности для клиента {client.user.email}",
     )
-    
+
     # Последние 10 заказов
     last_orders = db.query(Order).filter(
         Order.client_id == client_id
     ).order_by(Order.created_at.desc()).limit(10).all()
-    
+
     last_orders_summary = [
         ClientOrderSummary(
             id=str(order.id),
@@ -213,7 +231,7 @@ async def update_client_loyalty(
         )
         for order in last_orders
     ]
-    
+
     return ClientDetailResponse(
         id=client.id,
         user_id=str(client.user.id),

@@ -104,7 +104,7 @@ export const ManagerGantt = () => {
               <p><span className="font-medium">Техник:</span> {selectedOrderData.technician_name || "Не назначен"}</p>
               <p><span className="font-medium">Создан:</span> {new Date(selectedOrderData.created_at).toLocaleDateString("ru-RU")}</p>
               {selectedOrderData.deadline && <p><span className="font-medium">Дедлайн:</span> {new Date(selectedOrderData.deadline).toLocaleDateString("ru-RU")}</p>}
-              <p><span className="font-medium">Сумма:</span> {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(selectedOrderData.final_price))}</p>
+              <p><span className="font-medium">Сумма:</span> {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(selectedOrderData.final_price))}</p>
             </div>
 
             {selectedOrderData.items && selectedOrderData.items.length > 0 && (

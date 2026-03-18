@@ -169,7 +169,7 @@ export const ManagerMaterials = () => {
                         </span>
                       </TableCell>
                       <TableCell>{material.min_quantity} {material.unit}</TableCell>
-                      <TableCell>{new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(material.price_per_unit)}</TableCell>
+                      <TableCell>{new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(material.price_per_unit)}</TableCell>
                       <TableCell>{material.supplier || "—"}</TableCell>
                       <TableCell>
                         <Badge variant="destructive">Заканчивается</Badge>
@@ -213,7 +213,7 @@ export const ManagerMaterials = () => {
                       <TableCell className="font-medium">{material.name}</TableCell>
                       <TableCell>{material.quantity} {material.unit}</TableCell>
                       <TableCell>{material.min_quantity} {material.unit}</TableCell>
-                      <TableCell>{new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(material.price_per_unit)}</TableCell>
+                      <TableCell>{new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(material.price_per_unit)}</TableCell>
                       <TableCell>{material.supplier || "—"}</TableCell>
                       <TableCell>
                         <Badge variant="success">В наличии</Badge>

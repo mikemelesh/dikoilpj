@@ -70,7 +70,7 @@ export const ClientArchive = () => {
                       <div className="flex items-center gap-4">
                         <StatusBadge status={order.status} />
                         <span className="font-semibold">
-                          {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(order.final_price))}
+                          {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(order.final_price))}
                         </span>
                       </div>
                     </div>

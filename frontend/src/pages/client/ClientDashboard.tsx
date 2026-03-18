@@ -40,7 +40,7 @@ const getLoyaltyProgress = (totalOrders: number, tier: string) => {
 
 export const ClientDashboard = () => {
   const { user } = authStore();
-  const clientProfile = (user as any)?.client_profile;
+  const clientProfile = user?.client_profile;
 
   const { data: ordersData } = useQuery({
     queryKey: ["client-orders", { status: "new,confirmed,in_progress", limit: 5 }],
@@ -152,8 +152,8 @@ export const ClientDashboard = () => {
                           <span className="font-semibold">
                             {new Intl.NumberFormat("ru-RU", {
                               style: "currency",
-                              currency: "RUB",
-                              minimumFractionDigits: 0,
+                              currency: "BYN",
+                              minimumFractionDigits: 2,
                             }).format(Number(order.final_price))}
                           </span>
                         </div>

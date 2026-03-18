@@ -23,13 +23,16 @@ import type { Service, ServiceCategory } from "@/types";
 
 const orderSchema = z.object({
   items: z.array(z.object({
-    service_id: z.number().min(1, "Выберите услугу"),
+    service_id: z.number(),
     quantity: z.number().min(1, "Минимум 1"),
     specifications: z.record(z.string()).optional(),
   })).min(1, "Добавьте хотя бы одну услугу"),
   notes: z.string().max(2000).optional(),
   deadline: z.string().optional(),
   priority: z.enum(["normal", "urgent", "critical"]).default("normal"),
+}).refine((data) => data.items.some((item) => item.service_id > 0), {
+  message: "Выберите хотя бы одну услугу",
+  path: ["items"],
 });
 
 type OrderFormData = z.infer<typeof orderSchema>;
@@ -46,6 +49,16 @@ export const ClientNewOrder = () => {
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [finalPrice, setFinalPrice] = useState<number>(0);
 
+  const { reset, register, control, handleSubmit, watch, formState: { errors } } = useForm<OrderFormData>({
+    resolver: zodResolver(orderSchema),
+    defaultValues: {
+      items: [{ service_id: 0, quantity: 1, specifications: {} }],
+      notes: "",
+      deadline: "",
+      priority: "normal",
+    },
+  });
+
   // Загрузка данных из localStorage (из калькулятора)
   useEffect(() => {
     const pendingOrder = localStorage.getItem("pending_order");
@@ -53,24 +66,34 @@ export const ClientNewOrder = () => {
       try {
         const orderData = JSON.parse(pendingOrder);
         if (orderData?.items && orderData.items.length > 0) {
-          // Очищаем форму и добавляем услуги из калькулятора
-          reset({
-            items: orderData.items,
-            notes: "",
-            deadline: "",
-            priority: "normal",
-          });
-          setStep(1);
-          // Очищаем localStorage после загрузки
+          // Фильтруем элементы с service_id <= 0 перед установкой
+          const validItems = orderData.items.filter((item: { service_id: number }) => item.service_id > 0);
+          if (validItems.length > 0) {
+            // Очищаем форму и добавляем услуги из калькулятора
+            reset({
+              items: validItems,
+              notes: "",
+              deadline: "",
+              priority: "normal",
+            });
+            setStep(1);
+            // Очищаем localStorage после загрузки
+            localStorage.removeItem("pending_order");
+            toast.success("Услуги добавлены из калькулятора");
+          } else {
+            localStorage.removeItem("pending_order");
+            toast.error("Нет корректных услуг в заказе");
+          }
+        } else {
           localStorage.removeItem("pending_order");
-          toast.success("Услуги добавлены из калькулятора");
         }
       } catch (e) {
         console.error("Ошибка загрузки данных из калькулятора:", e);
         localStorage.removeItem("pending_order");
+        toast.error("Ошибка загрузки данных из калькулятора");
       }
     }
-  }, []);
+  }, [reset]);
 
   const { data: categoriesData } = useQuery({
     queryKey: ["service-categories"],
@@ -90,16 +113,6 @@ export const ClientNewOrder = () => {
 
   const categories = (categoriesData as ServiceCategory[]) || [];
   const services = (servicesData as { items: Service[] })?.items || [];
-
-  const { register, control, handleSubmit, watch, formState: { errors } } = useForm<OrderFormData>({
-    resolver: zodResolver(orderSchema),
-    defaultValues: {
-      items: [{ service_id: 0, quantity: 1, specifications: {} }],
-      notes: "",
-      deadline: "",
-      priority: "normal",
-    },
-  });
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const items = watch("items");
@@ -137,10 +150,16 @@ export const ClientNewOrder = () => {
   });
 
   const onSubmit = (data: OrderFormData) => {
-    // Фильтрация элементов с service_id <= 0
+    // Фильтрация элементов с service_id <= 0 и нормализация спецификаций
     const validData = {
       ...data,
-      items: data.items.filter((i) => i.service_id > 0),
+      items: data.items
+        .filter((i) => i.service_id > 0)
+        .map((i) => ({
+          service_id: i.service_id,
+          quantity: i.quantity,
+          specifications: i.specifications || {},
+        })),
     };
 
     if (validData.items.length === 0) {
@@ -152,7 +171,7 @@ export const ClientNewOrder = () => {
   };
 
   const formatPrice = (price: number) =>
-    new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(price);
+    new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(price);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">

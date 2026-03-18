@@ -269,6 +269,28 @@ $RECYCLE.BIN/
 *.iml
 
 # =============================================================================
+# Docker
+# =============================================================================
+
+# Docker Compose environment
+.docker.env
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Docker volumes
+volumes/
+
+# Docker build cache
+.docker/
+
+# Keep docker-compose.yml and Dockerfiles
+!docker-compose.yml
+!backend/Dockerfile
+!frontend/Dockerfile
+!backend/.dockerignore
+!frontend/.dockerignore
+
+# =============================================================================
 # Sensitive Files
 # =============================================================================
 

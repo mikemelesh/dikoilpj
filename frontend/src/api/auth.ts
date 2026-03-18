@@ -2,32 +2,48 @@ import { apiClient } from "./axios";
 import type { User, AuthTokens, LoginCredentials, RegisterData } from "@/types";
 
 // =============================================================================
+// Типы профилей
+// =============================================================================
+
+interface ClientProfile {
+  id: number;
+  clinic_name?: string;
+  address?: string;
+  discount_percent: number;
+  loyalty_tier: string;
+  total_orders: number;
+}
+
+interface TechnicianProfile {
+  id: number;
+  specialization?: string;
+  experience_years: number;
+  rating: number;
+  completed_orders: number;
+}
+
+interface ExtendedUser extends User {
+  client_profile?: ClientProfile;
+  technician_profile?: TechnicianProfile;
+}
+
+// =============================================================================
 // Типы ответов
 // =============================================================================
 
 interface AuthResponse {
   access_token: string;
   refresh_token: string;
-  token_type: string;
-  user?: User;
+  token_type?: string;
+  user?: ExtendedUser;
+  client_profile?: ClientProfile;
+  technician_profile?: TechnicianProfile;
 }
 
 interface MeResponse {
-  user: User;
-  client_profile?: {
-    id: number;
-    clinic_name?: string;
-    discount_percent: number;
-    loyalty_tier: string;
-    total_orders: number;
-  };
-  technician_profile?: {
-    id: number;
-    specialization?: string;
-    experience_years: number;
-    rating: number;
-    completed_orders: number;
-  };
+  user: ExtendedUser;
+  client_profile?: ClientProfile;
+  technician_profile?: TechnicianProfile;
 }
 
 // =============================================================================

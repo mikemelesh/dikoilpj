@@ -95,6 +95,7 @@ async def get_action_logs(
 
 @router.get("/users", response_model=UserListResponse)
 async def get_all_users(
+    search: Optional[str] = Query(None, min_length=1, description="Поиск по имени и email"),
     role: Optional[str] = Query(None, description="Фильтр по роли"),
     is_active: Optional[bool] = Query(None, description="Фильтр по активности"),
     page: int = Query(1, ge=1),
@@ -106,8 +107,21 @@ async def get_all_users(
     Получить список всех пользователей.
     Доступно: admin.
     """
-    query = db.query(User)
+    from sqlalchemy import or_
     
+    query = db.query(User)
+
+    # Поиск по имени и email
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            or_(
+                User.email.ilike(search_pattern),
+                User.first_name.ilike(search_pattern),
+                User.last_name.ilike(search_pattern),
+            )
+        )
+
     # Фильтры
     if role:
         valid_roles = ["guest", "client", "technician", "manager", "admin"]
@@ -117,15 +131,15 @@ async def get_all_users(
                 detail=f"Недопустимая роль. Допустимые: {', '.join(valid_roles)}"
             )
         query = query.filter(User.role == role.lower())
-    
+
     if is_active is not None:
         query = query.filter(User.is_active == is_active)
-    
+
     total = query.count()
     pages = math.ceil(total / limit) if total > 0 else 0
     offset = (page - 1) * limit
     users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
-    
+
     items = [
         UserSummaryResponse(
             id=str(u.id),
@@ -138,7 +152,7 @@ async def get_all_users(
         )
         for u in users
     ]
-    
+
     return UserListResponse(items=items, total=total, page=page, limit=limit, pages=pages)
 
 
@@ -277,18 +291,26 @@ async def create_backup(
     Создать дамп базы данных.
     Доступно: admin.
     """
+    import shutil
+    
     # Создаём директорию для бэкапов
     backup_dir = Path(settings.BASE_DIR.parent) / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Генерируем имя файла
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"backup_{timestamp}.sql"
     filepath = backup_dir / filename
-    
+
+    # Проверяем наличие pg_dump
+    if not shutil.which("pg_dump"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="pg_dump не найден. Установите PostgreSQL."
+        )
+
     # Получаем параметры подключения из DSN
     db_url = settings.SQLALCHEMY_DATABASE_URL
-    # postgresql+psycopg2://user:pass@host:port/dbname
     try:
         # Парсим DSN
         parts = db_url.replace("postgresql+psycopg2://", "").split("@")
@@ -300,7 +322,7 @@ async def create_backup(
         host = host_port[0]
         port = host_port[1] if len(host_port) > 1 else "5432"
         dbname = host_db[1]
-        
+
         # Формируем команду pg_dump
         cmd = [
             "pg_dump",
@@ -308,14 +330,14 @@ async def create_backup(
             "-p", port,
             "-U", user,
             "-d", dbname,
-            "-F", "p",  # plain text format
+            "-F", "p",
             "-f", str(filepath),
         ]
-        
+
         # Выполняем команду
         env = os.environ.copy()
         env["PGPASSWORD"] = password
-        
+
         result = subprocess.run(
             cmd,
             env=env,
@@ -323,45 +345,32 @@ async def create_backup(
             text=True,
             timeout=300,
         )
-        
+
         if result.returncode != 0:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Ошибка pg_dump: {result.stderr}"
             )
-        
-        # Получаем размер файла
-        file_size = filepath.stat().st_size
-        
+
         log_action(
             db=db,
             user_id=str(current_user.id),
             action_type="create_backup",
             entity_type="backup",
             entity_id=filename,
-            description=f"Создан бэкап БД: {filename} ({file_size} байт)",
+            description=f"Создан бэкап БД: {filename}",
         )
-        
+
         return BackupResponse(
             filename=filename,
-            size=file_size,
+            size=filepath.stat().st_size,
             created_at=datetime.now(timezone.utc),
         )
-        
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="pg_dump не найден. Установите PostgreSQL client tools."
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Таймаут создания бэкапа"
-        )
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка создания бэкапа: {str(e)}"
+            detail=f"Ошибка при создании бэкапа: {str(e)}"
         )
 
 

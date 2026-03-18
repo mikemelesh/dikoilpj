@@ -167,10 +167,10 @@ export const TechOrderDetail = () => {
                   <TableCell>{item.service?.name || `Услуга #${item.service_id}`}</TableCell>
                   <TableCell className="text-right">{item.quantity}</TableCell>
                   <TableCell className="text-right">
-                    {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(item.unit_price))}
+                    {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(item.unit_price))}
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(item.total_price))}
+                    {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(item.total_price))}
                   </TableCell>
                   <TableCell>
                     {item.specifications ? (

@@ -2,6 +2,8 @@
 
 Full-stack приложение для управления зуботехнической лабораторией.
 
+> **💡 Быстрый запуск через Docker:** См. [DOCKER.md](DOCKER.md) или секцию [Быстрый старт](#-быстрый-старт)
+
 ## 📋 Требования
 
 - Python 3.10+
@@ -10,6 +12,70 @@ Full-stack приложение для управления зуботехнич
 - npm 9+
 
 ## 🚀 Быстрый старт
+
+### 🐳 Запуск через Docker (Рекомендуется)
+
+Это самый простой способ запустить проект на любом устройстве!
+
+#### Требования:
+- **Docker Desktop** (Windows/Mac) или **Docker + Docker Compose** (Linux)
+- [Скачать Docker](https://www.docker.com/products/docker-desktop/)
+
+#### Команды для запуска:
+
+```bash
+# Клонируйте репозиторий
+git clone <URL_репозитория>
+cd dikoilpj
+
+# Запуск в режиме разработки (frontend + backend + db)
+docker-compose up --build
+
+# Или в фоновом режиме
+docker-compose up -d --build
+```
+
+**Готово!** Приложение доступно:
+- **Frontend:** http://localhost:5173
+- **Backend API:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+
+#### Остановка:
+```bash
+docker-compose down
+```
+
+#### Production режим (nginx):
+```bash
+# Запуск frontend на nginx (порт 80)
+docker-compose --profile production up -d
+```
+
+#### Просмотр логов:
+```bash
+# Все логи
+docker-compose logs -f
+
+# Лог конкретного сервиса
+docker-compose logs -f backend
+docker-compose logs -f frontend
+docker-compose logs -f db
+```
+
+#### Перезапуск:
+```bash
+# Пересоздать контейнеры
+docker-compose down
+docker-compose up --build
+
+# Пересоздать с очисткой данных (БД будет создана заново!)
+docker-compose down -v
+docker-compose up --build
+```
+
+---
+
+### 🔧 Ручная установка (без Docker)
 
 ### Backend
 
@@ -495,3 +561,260 @@ Content-Type: application/json
 ## 📄 Лицензия
 
 MIT
+
+---
+
+## 💻 Запуск проекта на другом устройстве
+
+### 🐳 Через Docker (Рекомендуется!)
+
+Это **самый простой способ** — все зависимости уже в контейнерах!
+
+#### 1. Установите Docker
+
+- **Windows/Mac:** [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- **Linux:** `sudo apt install docker.io docker-compose`
+
+#### 2. Клонируйте репозиторий
+
+```bash
+git clone <URL_репозитория>
+cd dikoilpj
+```
+
+#### 3. Запустите проект
+
+```bash
+# Одна команда поднимет всё: БД, backend, frontend
+docker-compose up --build
+```
+
+**Всё!** Приложение доступно:
+- **Frontend:** http://localhost:5173
+- **Backend:** http://localhost:8000
+- **API Docs:** http://localhost:8000/docs
+
+#### 4. Остановка
+
+```bash
+# Остановить и удалить контейнеры
+docker-compose down
+
+# Остановить с удалением данных БД
+docker-compose down -v
+```
+
+---
+
+### 🔧 Ручная установка (без Docker)
+
+Подробные инструкции см. в разделе [Быстрый старт](#-быстрый-старт)
+
+---
+
+### 📝 Тестовые учетные данные
+
+| Роль | Email | Пароль |
+|------|-------|--------|
+| **Admin** | `admin@dental-lab.ru` | `Admin123!` |
+| **Manager** | `manager1@dental-lab.ru` | `Manager123!` |
+| **Technician** | `technician1@dental-lab.ru` | `Tech123!` |
+| **Client** | `client1@dental-lab.ru` | `Client123!` |
+
+---
+
+### 🔧 Возможные проблемы и решения
+
+#### Docker
+
+**Ошибка: "port already in use"**
+```bash
+# Освободите порты или измените их в docker-compose.yml
+docker-compose down
+```
+
+**Ошибка: "Cannot start service"**
+```bash
+# Перезапустите Docker Desktop
+# Или проверьте, что Docker запущен
+docker --version
+```
+
+**Очистка кэша и пересборка:**
+```bash
+docker-compose build --no-cache
+docker-compose up
+```
+
+**Просмотр логов:**
+```bash
+docker-compose logs -f
+docker-compose logs -f backend
+docker-compose logs -f db
+```
+
+#### Ручная установка
+
+#### Ошибка: "psycopg2 не найден"
+```bash
+pip install psycopg2-binary
+```
+
+#### Ошибка: "port 5432 already in use"
+```bash
+# Windows - остановите службу PostgreSQL
+net stop postgresql-x64-14
+
+# Linux
+sudo systemctl stop postgresql
+```
+
+#### Ошибка: "npm install fails"
+```bash
+# Очистите кэш npm
+npm cache clean --force
+
+# Удалите node_modules и package-lock.json
+rm -rf node_modules package-lock.json
+
+# Попробуйте снова
+npm install
+```
+
+#### Ошибка: "CORS policy"
+Убедитесь, что в `backend/.env` правильно указан `CORS_ORIGINS`:
+```env
+CORS_ORIGINS=["http://localhost:5173"]
+```
+
+#### Ошибка: "database does not exist"
+```bash
+# Создайте базу данных
+psql -U postgres -c "CREATE DATABASE dental_lab;"
+
+# Примените миграции
+cd backend
+alembic upgrade head
+```
+
+---
+
+### 📝 Дополнительные команды
+
+#### Docker
+
+```bash
+# Просмотр запущенных контейнеров
+docker-compose ps
+
+# Остановка всех сервисов
+docker-compose down
+
+# Перезапуск конкретного сервиса
+docker-compose restart backend
+
+# Выполнение команды в контейнере
+docker-compose exec backend python -m app.seed_data_fixed
+docker-compose exec db psql -U postgres -d dental_lab
+
+# Очистка всех данных и пересоздание
+docker-compose down -v
+docker-compose up --build
+```
+
+#### Backend (ручная установка)
+
+```bash
+# Запуск миграций
+alembic upgrade head
+
+# Откат миграций
+alembic downgrade -1
+
+# Создание новой миграции
+alembic revision --autogenerate -m "Description"
+
+# Просмотр миграций
+alembic history
+
+# Запуск с production настройками
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+#### Frontend (ручная установка)
+
+```bash
+# Запуск dev-сервера
+npm run dev
+
+# Сборка production версии
+npm run build
+
+# Предпросмотр production сборки
+npm run preview
+
+# Проверка типов
+npm run type-check
+
+# Линтинг
+npm run lint
+```
+
+---
+
+### 🌐 Доступ с других устройств в сети
+
+#### Через Docker:
+
+1. **Измените docker-compose.yml:**
+   ```yaml
+   services:
+     backend:
+       ports:
+         - "8000:8000"  # Оставьте как есть
+
+     frontend:
+       ports:
+         - "5173:5173"  # Оставьте как есть
+   ```
+
+2. **Узнайте свой IP:**
+   ```bash
+   # Windows
+   ipconfig
+   # Linux/Mac
+   ifconfig
+   ```
+
+3. **Доступ с другого устройства:**
+   ```
+   http://<ВАШ_IP>:8000/docs - Backend API
+   http://<ВАШ_IP>:5173 - Frontend
+   ```
+
+4. **Брандмауэр:** Откройте порты 8000 и 5173
+
+#### Ручная установка:
+
+1. **Backend:** Запустите с `--host 0.0.0.0`:
+   ```bash
+   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+2. **Frontend:** В `vite.config.ts` добавьте:
+   ```ts
+   export default defineConfig({
+     server: {
+       host: '0.0.0.0',
+       port: 5173,
+     },
+   })
+   ```
+
+3. **Брандмауэр:** Откройте порты 8000 и 5173
+
+4. **Доступ с другого устройства:**
+   ```
+   http://<ВАШ_IP>:8000 - Backend
+   http://<ВАШ_IP>:5173 - Frontend
+   ```

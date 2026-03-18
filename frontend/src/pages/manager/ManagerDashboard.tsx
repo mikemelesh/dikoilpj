@@ -76,8 +76,8 @@ export const ManagerDashboard = () => {
   const newOrders = newOrdersData?.items || [];
   const pendingRequests = materialRequests?.items || [];
 
-  const revenue = analytics?.by_status ? 
-    new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(
+  const revenue = analytics?.by_status ?
+    new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(
       Object.values(analytics.by_status).reduce((a, b) => a + b, 0) * 1000 // заглушка
     ) : "—";
 
@@ -157,7 +157,7 @@ export const ManagerDashboard = () => {
                   <div className="space-y-1">
                     <p className="font-medium">{order.order_number}</p>
                     <p className="text-sm text-muted-foreground">
-                      {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", minimumFractionDigits: 0 }).format(Number(order.final_price))}
+                      {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(order.final_price))}
                       {order.deadline && (
                         <span className={new Date(order.deadline) < new Date() ? " text-red-500 font-medium" : ""}>
                           {" • "}Дедлайн: {new Date(order.deadline).toLocaleDateString("ru-RU")}

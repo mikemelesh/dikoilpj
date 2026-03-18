@@ -65,7 +65,7 @@ export const HomePage = () => {
       try {
         const [categoriesRes, techniciansRes, promotionsRes, reviewsRes] = await Promise.all([
           apiClient.get<ServiceCategory[]>("/services/categories"),
-          apiClient.get<Technician[]>("/technicians?limit=3"),
+          apiClient.get<Technician[]>("/technicians?available_only=false&limit=3"),
           apiClient.get<Promotion[]>("/promotions"),
           apiClient.get<{ items: Review[]; total: number }>("/reviews?limit=5"),
         ]);
