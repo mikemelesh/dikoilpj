@@ -13,6 +13,7 @@ from ..dependencies.auth import get_current_active_user, require_roles
 from ..models.client import Client
 from ..models.order import Order
 from ..models.review import Review
+from ..models.technician import Technician
 from ..models.user import User, UserRole
 from ..schemas.secondary import (
     ReviewCreate,
@@ -217,6 +218,38 @@ async def moderate_review(
     db.add(review)
     db.commit()
     db.refresh(review)
+
+    # Обновляем рейтинг техника по опубликованным отзывам
+    # (рейтинг должен учитывать оценки, которые клиент оставил к заказу).
+    if review.order_id is not None:
+        order = db.query(Order).filter(Order.id == review.order_id).first()
+        if order and order.technician_id is not None:
+            technician = db.query(Technician).filter(Technician.id == order.technician_id).first()
+            if technician:
+                avg_rating = (
+                    db.query(func.avg(Review.rating))
+                    .join(Order, Review.order_id == Order.id)
+                    .filter(
+                        Review.is_published == True,
+                        Order.technician_id == order.technician_id,
+                    )
+                    .scalar()
+                )
+                technician.rating = float(avg_rating) if avg_rating is not None else 0.0
+                db.add(technician)
+                db.commit()
+
+                # Логируем изменение рейтинга техника
+                log_action(
+                    db=db,
+                    user_id=str(current_user.id),
+                    action_type="update_technician_rating",
+                    entity_type="technician",
+                    entity_id=str(technician.id),
+                    description=(
+                        f"Рейтинг техника обновлён после модерации отзыва (review_id={review.id})."
+                    ),
+                )
     
     log_action(
         db=db,

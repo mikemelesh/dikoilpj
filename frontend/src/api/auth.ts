@@ -54,14 +54,13 @@ interface MeResponse {
  * Вход в систему
  */
 export const login = async (credentials: LoginCredentials): Promise<AuthResponse> => {
-  const formData = new FormData();
-  formData.append("username", credentials.email);
-  formData.append("password", credentials.password);
+  // FastAPI OAuth2PasswordRequestForm корректно парсит только application/x-www-form-urlencoded.
+  const body = new URLSearchParams();
+  body.append("username", credentials.email);
+  body.append("password", credentials.password);
 
-  const response = await apiClient.post<AuthResponse>("/auth/login", formData, {
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+  const response = await apiClient.post<AuthResponse>("/auth/login", body, {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });
 
   return response.data;

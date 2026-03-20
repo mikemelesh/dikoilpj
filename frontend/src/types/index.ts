@@ -177,7 +177,7 @@ export interface Review {
   id: number
   client_id: number
   client_name?: string
-  order_id?: number
+  order_id?: string
   order_number?: string
   rating: number
   text?: string

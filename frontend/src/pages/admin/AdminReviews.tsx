@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Star, Check, X } from "lucide-react";
 
-interface Review { id: number; client_id: number; client_name?: string; order_id?: number; order_number?: string; rating: number; text?: string; is_moderated: boolean; is_published: boolean; created_at: string }
+interface Review { id: number; client_id: number; client_name?: string; order_id?: string; order_number?: string; rating: number; text?: string; is_moderated: boolean; is_published: boolean; created_at: string }
 
 export const AdminReviews = () => {
   const queryClient = useQueryClient();

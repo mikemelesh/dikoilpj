@@ -163,8 +163,27 @@ async def login(
 ):
     db = SessionLocal()
     try:
-        user = db.query(User).filter(User.email == form_data.username).first()
-        if user is None or not verify_password(form_data.password, user.hashed_password):
+        # OAuth2PasswordRequestForm корректно работает только для application/x-www-form-urlencoded.
+        # Если клиент прислал другой формат, username/password могут оказаться пустыми.
+        username = form_data.username or ""
+        password = form_data.password or ""
+
+        if not username or not password:
+            # Пытаемся вручную вытащить поля из form (request.form кэширует тело, повторный вызов обычно безопасен)
+            try:
+                form = await request.form()
+                username = str(form.get("username") or form.get("email") or "")
+                password = str(form.get("password") or "")
+            except Exception:
+                # Если не удалось прочитать form — оставляем то, что пришло через OAuth2PasswordRequestForm
+                pass
+
+        user = db.query(User).filter(User.email == username).first()
+        password_ok = False
+        if user is not None:
+            password_ok = verify_password(password, user.hashed_password)
+
+        if user is None or not password_ok:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверная пара логин/пароль")
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Пользователь деактивирован")

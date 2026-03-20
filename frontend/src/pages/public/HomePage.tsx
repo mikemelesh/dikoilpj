@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { apiClient } from "@/api/axios";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Clock, Award, TrendingUp, ChevronRight, Building2 } from "lucide-react";
+import { Star, Clock, Award, TrendingUp, ChevronRight, Building2, User, LogOut, ChevronDown } from "lucide-react";
 import { toast } from "react-toastify";
 import { cn } from "@/utils";
+import { useAuthStore } from "@/stores/authStore";
 
 // =============================================================================
 // Типы
@@ -54,11 +55,27 @@ interface Review {
 // =============================================================================
 
 export const HomePage = () => {
+  const navigate = useNavigate();
+  const { user, logout, isAuthenticated } = useAuthStore();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+    setIsDropdownOpen(false);
+  };
+
+  const handleProfileClick = () => {
+    if (user) {
+      navigate(`/${user.role}/profile`);
+    }
+    setIsDropdownOpen(false);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -95,12 +112,56 @@ export const HomePage = () => {
             <span className="font-semibold">Dental Lab</span>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/login">
-              <Button variant="outline" size="sm">Войти</Button>
-            </Link>
-            <Link to="/register">
-              <Button size="sm">Регистрация</Button>
-            </Link>
+            {isAuthenticated && user ? (
+              <div className="relative">
+                <button
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="flex items-center gap-2 rounded-lg hover:bg-accent px-3 py-2 transition-colors"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                    <User className="h-4 w-4 text-primary" />
+                  </div>
+                  <span className="hidden sm:inline-block text-sm font-medium">
+                    {user.first_name || user.last_name || user.email}
+                  </span>
+                  <ChevronDown className={cn("h-4 w-4 transition-transform", isDropdownOpen && "rotate-180")} />
+                </button>
+
+                {isDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setIsDropdownOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-48 rounded-lg border bg-popover py-1 shadow-lg z-20">
+                      <button
+                        onClick={handleProfileClick}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-accent transition-colors"
+                      >
+                        <User className="h-4 w-4" />
+                        Профиль
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Выйти
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="outline" size="sm">Войти</Button>
+                </Link>
+                <Link to="/register">
+                  <Button size="sm">Регистрация</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>

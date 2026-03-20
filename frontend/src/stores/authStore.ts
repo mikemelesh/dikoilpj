@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist, devtools } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 import type { UserRole, User } from "@/types";
 
@@ -30,6 +30,7 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  _hasHydrated: boolean;
 
   // Actions
   login: (tokens: { access_token: string; refresh_token: string }, user: ExtendedUser) => void;
@@ -37,63 +38,88 @@ interface AuthState {
   setTokens: (accessToken: string, refreshToken: string) => void;
   updateUser: (user: Partial<ExtendedUser>) => void;
   clearAuth: () => void;
+  setHasHydrated: (hasHydrated: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
-  devtools(
-    persist(
-      (set, get) => ({
-        user: null,
-        accessToken: null,
-        refreshToken: null,
-        isAuthenticated: false,
+  persist(
+    (set) => ({
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      _hasHydrated: false,
 
-        login: (tokens, user) => set({
-          user,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          isAuthenticated: true,
-        }),
-
-        logout: () => {
-          set({
-            user: null,
-            accessToken: null,
-            refreshToken: null,
-            isAuthenticated: false,
-          });
-          // Очищаем localStorage только для auth-storage
-          localStorage.removeItem("auth-storage");
-        },
-
-        setTokens: (accessToken, refreshToken) => set((state) => ({
-          ...state,
-          accessToken,
-          refreshToken,
-        })),
-
-        updateUser: (userData) => set((state) => ({
-          ...state,
-          user: state.user ? { ...state.user, ...userData } : null,
-        })),
-
-        clearAuth: () => set({
+      login: (tokens, user) => {
+        // Сначала очищаем старые данные
+        set({
           user: null,
           accessToken: null,
           refreshToken: null,
           isAuthenticated: false,
-        }),
-      }),
-      {
-        name: "auth-storage",
-        partialize: (state) => ({
-          user: state.user,
-          accessToken: state.accessToken,
-          refreshToken: state.refreshToken,
-          isAuthenticated: state.isAuthenticated,
-        }),
+        });
+        // Затем устанавливаем новые
+        set({
+          user,
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          isAuthenticated: true,
+        });
+        // Очищаем кэш current-user-profile для ProfileSync
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth-login'));
+        }
       },
-    ),
+
+      logout: () => {
+        set({
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+          isAuthenticated: false,
+        });
+        // Очищаем localStorage только для auth-storage
+        localStorage.removeItem("auth-storage");
+      },
+
+      setTokens: (accessToken, refreshToken) => set((state) => ({
+        ...state,
+        accessToken,
+        refreshToken,
+      })),
+
+      updateUser: (userData) => set((state) => ({
+        ...state,
+        user: state.user ? { ...state.user, ...userData } : null,
+      })),
+
+      clearAuth: () => set({
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
+      }),
+
+      setHasHydrated: (hasHydrated) => set({ _hasHydrated: hasHydrated }),
+    }),
+    {
+      name: "auth-storage",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
+      onRehydrateStorage: () => (state, error) => {
+        if (error || !state) {
+          console.error("Ошибка восстановления auth:", error);
+          useAuthStore.getState().setHasHydrated(true);
+          return;
+        }
+        state.setHasHydrated(true);
+      },
+    },
   ),
 );
 
@@ -104,3 +130,9 @@ export const authStore = useAuthStore;
 export const selectIsAuthenticated = (state: AuthState) => state.isAuthenticated;
 export const selectUser = (state: AuthState) => state.user;
 export const selectUserRole = (state: AuthState) => state.user?.role ?? null;
+
+// Хук для ожидания гидратации
+export const useAuthHydration = () => {
+  const hasHydrated = useAuthStore((state) => state._hasHydrated);
+  return hasHydrated;
+};

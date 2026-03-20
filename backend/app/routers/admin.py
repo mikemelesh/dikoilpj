@@ -292,7 +292,8 @@ async def create_backup(
     Доступно: admin.
     """
     import shutil
-    
+    import subprocess
+
     # Создаём директорию для бэкапов
     backup_dir = Path(settings.BASE_DIR.parent) / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -303,34 +304,67 @@ async def create_backup(
     filepath = backup_dir / filename
 
     # Проверяем наличие pg_dump
-    if not shutil.which("pg_dump"):
+    pg_dump_path = shutil.which("pg_dump")
+    if not pg_dump_path:
+        # Пробуем стандартные пути установки PostgreSQL на Windows
+        possible_paths = [
+            r"C:\Program Files\PostgreSQL\14\bin\pg_dump.exe",
+            r"C:\Program Files\PostgreSQL\15\bin\pg_dump.exe",
+            r"C:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
+        ]
+        for path in possible_paths:
+            if Path(path).exists():
+                pg_dump_path = path
+                break
+
+    if not pg_dump_path:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="pg_dump не найден. Установите PostgreSQL."
+            detail="pg_dump не найден. Убедитесь, что PostgreSQL установлен и pg_dump доступен в PATH."
         )
 
     # Получаем параметры подключения из DSN
     db_url = settings.SQLALCHEMY_DATABASE_URL
     try:
-        # Парсим DSN
-        parts = db_url.replace("postgresql+psycopg2://", "").split("@")
-        user_pass = parts[0].split(":")
-        user = user_pass[0]
-        password = user_pass[1] if len(user_pass) > 1 else ""
-        host_db = parts[1].split("/")
-        host_port = host_db[0].split(":")
-        host = host_port[0]
-        port = host_port[1] if len(host_port) > 1 else "5432"
-        dbname = host_db[1]
+        # Парсим DSN (формат: postgresql+psycopg2://user:pass@host:port/dbname)
+        # Удаляем префикс
+        db_url_clean = db_url.replace("postgresql+psycopg://", "").replace("postgresql+psycopg2://", "")
+        
+        # Разделяем user:pass и host:port/dbname
+        if "@" in db_url_clean:
+            user_pass, host_db = db_url_clean.split("@", 1)
+        else:
+            host_db = db_url_clean
+            user_pass = ""
+        
+        # Парсим user:pass
+        if ":" in user_pass:
+            user, password = user_pass.split(":", 1)
+        else:
+            user = user_pass
+            password = ""
+        
+        # Парсим host:port/dbname
+        if "/" in host_db:
+            host_port, dbname = host_db.rsplit("/", 1)
+        else:
+            raise ValueError("Некорректный формат DSN: отсутствует имя базы данных")
+        
+        # Парсим host:port
+        if ":" in host_port:
+            host, port = host_port.rsplit(":", 1)
+        else:
+            host = host_port
+            port = "5432"
 
         # Формируем команду pg_dump
         cmd = [
-            "pg_dump",
+            pg_dump_path,
             "-h", host,
             "-p", port,
             "-U", user,
             "-d", dbname,
-            "-F", "p",
+            "-F", "p",  # Plain text format
             "-f", str(filepath),
         ]
 
@@ -347,9 +381,14 @@ async def create_backup(
         )
 
         if result.returncode != 0:
+            error_detail = result.stderr or result.stdout or "Неизвестная ошибка"
+            # Логируем полную ошибку для отладки
+            print(f"Backup error: {error_detail}")
+            print(f"Command: {' '.join(cmd)}")
+            print(f"Host: {host}, Port: {port}, User: {user}, DB: {dbname}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Ошибка pg_dump: {result.stderr}"
+                detail=f"Ошибка pg_dump: {error_detail}"
             )
 
         log_action(
@@ -367,7 +406,10 @@ async def create_backup(
             created_at=datetime.now(timezone.utc),
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"Unexpected backup error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при создании бэкапа: {str(e)}"

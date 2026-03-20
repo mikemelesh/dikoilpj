@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { login as loginApi } from "@/api/auth";
 import { authStore } from "@/stores/authStore";
@@ -33,6 +34,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export const LoginPage = () => {
   const navigate = useNavigate();
   const login = authStore((state) => state.login);
+  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -51,7 +53,14 @@ export const LoginPage = () => {
     setIsLoading(true);
 
     try {
+      // Очищаем localStorage и кэш react-query перед новым входом
+      localStorage.removeItem("auth-storage");
+      queryClient.clear();
+
       const response = await loginApi(data);
+
+      // Логируем ответ для отладки
+      console.log("Login response:", response);
 
       // Проверяем, что пользователь есть в ответе
       if (!response.user) {

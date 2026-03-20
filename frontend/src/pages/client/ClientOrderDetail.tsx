@@ -7,6 +7,7 @@ import { z } from "zod";
 import { toast } from "react-toastify";
 
 import { getOrder, uploadFile, deleteFile } from "@/api/orders";
+import { createOrderReview } from "@/api/reviews";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +69,29 @@ export const ClientOrderDetail = () => {
       toast.success("Файл удалён");
     },
     onError: () => toast.error("Ошибка удаления файла"),
+  });
+
+  const createReviewMutation = useMutation({
+    mutationFn: async (payload: { rating: number; text?: string }) => {
+      if (!id) {
+        throw new Error("Не найден ID заказа");
+      }
+      return createOrderReview({
+        order_id: id,
+        rating: payload.rating,
+        text: payload.text,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order", id] });
+      toast.success("Отзыв отправлен на модерацию");
+      setReviewRating(0);
+      setReviewText("");
+    },
+    onError: (err: unknown) => {
+      const message = err instanceof Error ? err.message : "Ошибка отправки отзыва";
+      toast.error(message);
+    },
   });
 
   const handleFilesChange = (files: File[]) => {
@@ -324,11 +348,12 @@ export const ClientOrderDetail = () => {
               />
             </div>
             <Button
-              disabled={!reviewRating}
+              disabled={!reviewRating || createReviewMutation.isPending}
               onClick={() => {
-                toast.success("Отзыв отправлен на модерацию");
-                setReviewRating(0);
-                setReviewText("");
+                createReviewMutation.mutate({
+                  rating: reviewRating,
+                  text: reviewText.trim() ? reviewText : undefined,
+                });
               }}
             >
               Отправить отзыв

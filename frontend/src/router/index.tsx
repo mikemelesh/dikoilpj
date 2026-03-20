@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
-import { authStore } from "@/stores/authStore";
+import { useAuthStore, useAuthHydration } from "@/stores/authStore";
 import type { Role } from "@/types";
 import { Layout } from "@/components/layout/Layout";
+import { LoadingScreen } from "@/components/shared/LoadingScreen";
 
 // Pages - Public
 import { HomePage } from "@/pages/public/HomePage";
@@ -74,8 +75,13 @@ export const ProtectedRoute = ({
   children,
   redirectTo,
 }: ProtectedRouteProps) => {
-  const auth = authStore.getState();
-  const { user, isAuthenticated } = auth;
+  const { user, isAuthenticated } = useAuthStore();
+  const hasHydrated = useAuthHydration();
+
+  // Ждём завершения гидратации перед проверкой авторизации
+  if (!hasHydrated) {
+    return <LoadingScreen />;
+  }
 
   // Если не авторизован — redirect на login
   if (!isAuthenticated || !user) {
@@ -103,30 +109,13 @@ const DASHBOARD_ROUTES: Record<Role, string> = {
 };
 
 export const AppRouter = () => {
-  // Получаем состояние из store
-  const auth = authStore.getState();
-  const isAuthenticated = auth.isAuthenticated;
-  const user = auth.user;
+  const { user, isAuthenticated } = useAuthStore();
+  const hasHydrated = useAuthHydration();
 
-  // Проверяем, есть ли пользователь в localStorage
-  const storedAuth = typeof window !== 'undefined' 
-    ? localStorage.getItem("auth-storage") 
-    : null;
-  
-  // Парсим и проверяем валидность
-  let isValidAuth = false;
-  if (storedAuth) {
-    try {
-      const parsed = JSON.parse(storedAuth);
-      isValidAuth = parsed.state?.isAuthenticated === true && parsed.state?.user?.role;
-    } catch {
-      localStorage.removeItem("auth-storage");
-    }
+  // Ждём завершения гидратации перед рендерингом маршрутов
+  if (!hasHydrated) {
+    return <LoadingScreen />;
   }
-
-  // Если auth из localStorage невалиден — используем дефолтное состояние
-  const finalIsAuthenticated = isValidAuth ? isAuthenticated : false;
-  const finalUser = isValidAuth ? user : null;
 
   return (
     <Routes>
@@ -142,14 +131,14 @@ export const AppRouter = () => {
 
       {/* Маршруты авторизации — только для неавторизованных (без Layout) */}
       <Route path="/login" element={
-        !finalIsAuthenticated 
-          ? <LoginPage /> 
-          : <Navigate to={finalUser?.role ? getDashboardPath(finalUser.role) : "/client"} replace />
+        !isAuthenticated
+          ? <LoginPage />
+          : <Navigate to={user?.role ? getDashboardPath(user.role) : "/client"} replace />
       } />
       <Route path="/register" element={
-        !finalIsAuthenticated 
-          ? <RegisterPage /> 
-          : <Navigate to={finalUser?.role ? getDashboardPath(finalUser.role) : "/client"} replace />
+        !isAuthenticated
+          ? <RegisterPage />
+          : <Navigate to={user?.role ? getDashboardPath(user.role) : "/client"} replace />
       } />
 
       {/* Авторизованные маршруты — с Layout */}
@@ -178,7 +167,7 @@ export const AppRouter = () => {
         <Route
           path="/technician/*"
           element={
-            <ProtectedRoute allowedRoles={["technician", "manager", "admin"]}>
+            <ProtectedRoute allowedRoles={["technician"]}>
               <TechnicianRoutes />
             </ProtectedRoute>
           }
@@ -188,7 +177,7 @@ export const AppRouter = () => {
         <Route
           path="/client/*"
           element={
-            <ProtectedRoute allowedRoles={["client", "manager", "admin"]}>
+            <ProtectedRoute allowedRoles={["client"]}>
               <ClientRoutes />
             </ProtectedRoute>
           }

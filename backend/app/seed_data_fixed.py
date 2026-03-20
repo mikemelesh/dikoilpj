@@ -8,6 +8,14 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from dotenv import load_dotenv
 import uuid
+import sys
+
+# Чтобы вывод с emoji не падал из-за кодировки консоли Windows (cp1251)
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)

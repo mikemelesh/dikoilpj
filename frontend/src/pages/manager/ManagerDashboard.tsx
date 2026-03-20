@@ -24,10 +24,10 @@ export const ManagerDashboard = () => {
     retry: 2,
   });
 
-  // Новые заказы (ожидают подтверждения)
+  // Новые заказы (только новые, которые ожидают подтверждения)
   const { data: newOrdersData } = useQuery({
     queryKey: ["manager-new-orders"],
-    queryFn: () => getOrders({ status: ["new", "confirmed"], limit: 10 }),
+    queryFn: () => getOrders({ status: ["new"], limit: 10 }),
   });
 
   // Заявки на материалы (pending)
@@ -58,6 +58,7 @@ export const ManagerDashboard = () => {
     mutationFn: (orderId: string) => updateOrderStatus(orderId, { new_status: "confirmed", comment: "Подтверждено менеджером" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["manager-new-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-analytics"] });
       toast.success("Заказ подтверждён");
     },
     onError: () => toast.error("Ошибка подтверждения"),

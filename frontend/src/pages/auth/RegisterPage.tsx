@@ -49,11 +49,12 @@ export const RegisterPage = () => {
   const navigate = useNavigate();
   const login = authStore((state) => state.login);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<string>("client");
+  const [selectedRole, setSelectedRole] = useState<RegisterFormData["role"]>("client");
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
@@ -199,10 +200,12 @@ export const RegisterPage = () => {
                 <Select
                   value={selectedRole}
                   onValueChange={(value) => {
-                    setSelectedRole(value);
-                    // Обновляем значение в форме
-                    const event = { target: { name: "role", value } };
-                    register("role").onChange(event);
+                    setSelectedRole(value as RegisterFormData["role"]);
+                    // Надежно записываем значение поля в react-hook-form
+                    setValue("role", value as RegisterFormData["role"], {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    });
                   }}
                 >
                   <SelectTrigger className="pl-10">
