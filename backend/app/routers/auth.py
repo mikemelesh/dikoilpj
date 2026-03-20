@@ -49,6 +49,18 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class UserInfo(BaseModel):
+    id: str
+    email: EmailStr
+    first_name: Optional[str]
+    last_name: Optional[str]
+    phone: Optional[str]
+    role: str
+
+    class Config:
+        from_attributes = True
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -60,18 +72,6 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
-
-
-class UserInfo(BaseModel):
-    id: str
-    email: EmailStr
-    first_name: Optional[str]
-    last_name: Optional[str]
-    phone: Optional[str]
-    role: str
-
-    class Config:
-        from_attributes = True
 
 
 class MeResponse(BaseModel):

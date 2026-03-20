@@ -352,11 +352,11 @@ async def update_service(
 async def delete_service(
     service_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["admin"])),
+    current_user: User = Depends(require_roles(["manager", "admin"])),
 ):
     """
     Удалить услугу.
-    Доступно: только admin.
+    Доступно: manager, admin.
     """
     db_service = db.query(Service).filter(
         Service.id == service_id

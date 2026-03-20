@@ -96,6 +96,18 @@ class OrderBase(BaseModel):
     deadline: Optional[date] = Field(None, description="Дедлайн")
     priority: str = Field(default="normal", description="Приоритет")
 
+    @field_validator('deadline', mode='before')
+    @classmethod
+    def parse_deadline(cls, v):
+        if v is None or v == '':
+            return None
+        if isinstance(v, date):
+            return v
+        # Parse string date (YYYY-MM-DD)
+        if isinstance(v, str):
+            return date.fromisoformat(v)
+        return v
+
 
 class OrderCreate(OrderBase):
     """Схема для создания заказа."""
@@ -107,6 +119,17 @@ class OrderUpdate(BaseModel):
     notes: Optional[str] = Field(None, max_length=2000)
     deadline: Optional[date] = None
     priority: Optional[str] = None
+
+    @field_validator('deadline', mode='before')
+    @classmethod
+    def parse_deadline(cls, v):
+        if v is None or v == '':
+            return None
+        if isinstance(v, date):
+            return v
+        if isinstance(v, str):
+            return date.fromisoformat(v)
+        return v
 
 
 class OrderStatusUpdate(BaseModel):
@@ -147,15 +170,6 @@ class OrderResponse(BaseModel):
     status_history: List[OrderStatusHistoryResponse] = Field(default_factory=list)
 
 
-class OrderListResponse(BaseModel):
-    """Схема списка заказов с пагинацией."""
-    items: List[OrderSummaryResponse]
-    total: int
-    page: int
-    limit: int
-    pages: int
-
-
 class OrderSummaryResponse(BaseModel):
     """Краткая схема заказа для списков."""
     model_config = ConfigDict(from_attributes=True)
@@ -169,3 +183,12 @@ class OrderSummaryResponse(BaseModel):
     deadline: Optional[date] = None
     technician_id: Optional[int] = None
     technician_name: Optional[str] = None
+
+
+class OrderListResponse(BaseModel):
+    """Схема списка заказов с пагинацией."""
+    items: List[OrderSummaryResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int

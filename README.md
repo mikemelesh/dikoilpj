@@ -161,6 +161,10 @@ dikoilpj/
 └── README.md
 ```
 
+admin@dental-lab.ru / Admin123!
+manager1@dental-lab.ru / Manager123!
+technician1@dental-lab.ru / Tech123!
+client1@dental-lab.ru / Client123!
 ## 🔐 Роли пользователей
 
 | Роль | Описание | Как получить |
@@ -818,3 +822,73 @@ npm run lint
    http://<ВАШ_IP>:8000 - Backend
    http://<ВАШ_IP>:5173 - Frontend
    ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+admin@dental-lab.ru / Admin123!
+manager1@dental-lab.ru / Manager123!
+technician1@dental-lab.ru / Tech123!
+client1@dental-lab.ru / Client123!

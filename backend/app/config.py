@@ -16,7 +16,7 @@ class Settings:
     # Database (PostgreSQL) - reads from environment variable or uses default
     SQLALCHEMY_DATABASE_URL: str = os.getenv(
         "SQLALCHEMY_DATABASE_URL",
-        "postgresql+psycopg2://postgres:postgres@localhost:5432/dental_lab"
+        "postgresql+psycopg://postgres:postgres123@localhost:5433/dental_lab"
     )
 
     # Paths
