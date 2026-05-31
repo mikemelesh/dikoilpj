@@ -26,13 +26,14 @@ from .models.user import User, UserRole, LoyaltyTier
 from .models.client import Client
 from .models.technician import Technician
 from .models.service import Service, ServiceCategory
-from .models.order import Order, OrderItem, OrderStatus, OrderPriority, OrderStatusHistory
+from .models.order import Order, OrderItem, OrderStatus, OrderPriority, OrderStatusHistory, OrderFile
 from .models.material import Material
 from .models.order import MaterialRequest, MaterialRequestStatus
 from .models.review import Review
 from .models.article import Article
 from .models.promotion import Promotion, PromotionAppliesTo
 from .models.knowledge import KnowledgeBase
+from .models.faq import Faq
 from .utils.security import get_password_hash
 
 
@@ -88,6 +89,7 @@ def create_clients(db: Session, users: dict) -> dict:
     db.query(OrderItem).delete()
     db.query(Review).delete()
     db.query(MaterialRequest).delete()
+    db.query(OrderFile).delete()
     db.query(Order).delete()
     db.query(Client).delete()
     db.query(Technician).delete()
@@ -640,6 +642,46 @@ def create_promotions(db: Session) -> list:
     return promotions
 
 
+def create_faqs(db: Session) -> list:
+    """Создание FAQ."""
+    print("\n❓ Создание FAQ...")
+
+    faqs_data = [
+        {"question": "Как сделать заказ?", "answer": "Для создания заказа зарегистрируйтесь на сайте, перейдите в личный кабинет клиента и нажмите «Создать заказ». Выберите необходимые услуги, укажите количество и заполните детали заказа.", "category": "Заказы", "sort_order": 1},
+        {"question": "Какие сроки изготовления?", "answer": "Сроки изготовления зависят от типа услуги и сложности работы. Обычно от 3 до 21 дня. Точные сроки указываются при подтверждении заказа.", "category": "Заказы", "sort_order": 2},
+        {"question": "Можно ли изменить заказ после оформления?", "answer": "Да, вы можете изменить заказ, пока он находится в статусе «Новый». После подтверждения заказа изменения возможны только через менеджера.", "category": "Заказы", "sort_order": 3},
+        {"question": "Как отследить статус заказа?", "answer": "В личном кабинете клиента отображаются все ваши заказы с текущим статусом. Вы также получите уведомление при изменении статуса.", "category": "Заказы", "sort_order": 4},
+        {"question": "Какие материалы вы используете?", "answer": "Мы используем только сертифицированные материалы от ведущих производителей: Zirkonzahn, Ivoclar, Bego, Kulzer, Kerr, Formlabs, 3M, Zhermack.", "category": "Материалы", "sort_order": 5},
+        {"question": "Есть ли гарантия на работу?", "answer": "Да, на все работы предоставляется гарантия. Срок гарантии зависит от типа услуги и используемых материалов.", "category": "Гарантия", "sort_order": 6},
+        {"question": "Как получить скидку?", "answer": "У нас действует программа лояльности. Скидка автоматически применяется к заказам в зависимости от накопленной суммы заказов: от 5% до 20%.", "category": "Оплата", "sort_order": 7},
+        {"question": "Можно ли заказать срочное изготовление?", "answer": "Да, при оформлении заказа выберите приоритет «Срочный» или «Критичный». Обратите внимание, что за срочность может взиматься дополнительная плата.", "category": "Заказы", "sort_order": 8},
+        {"question": "Как происходит оплата?", "answer": "Оплата производится после завершения заказа и перед выдачей. Возможна оплата наличными или безналичным расчётом.", "category": "Оплата", "sort_order": 9},
+        {"question": "Можно ли вернуть заказ?", "answer": "Возврат возможен в случае брака или несоответствия specifications. Свяжитесь с менеджером в течение 3 дней после получения заказа.", "category": "Возврат", "sort_order": 10},
+    ]
+
+    faqs = []
+    for faq_data in faqs_data:
+        existing = db.query(Faq).filter(Faq.question == faq_data["question"]).first()
+        if existing:
+            faqs.append(existing)
+            continue
+
+        faq = Faq(
+            question=faq_data["question"],
+            answer=faq_data["answer"],
+            category=faq_data["category"],
+            sort_order=faq_data["sort_order"],
+            is_published=True,
+        )
+        db.add(faq)
+        db.flush()
+        faqs.append(faq)
+        print(f"  ✅ FAQ: {faq.question[:50]}...")
+
+    db.commit()
+    return faqs
+
+
 def run_seed():
     """Запуск заполнения БД."""
     print("=" * 60)
@@ -664,6 +706,7 @@ def run_seed():
         create_articles(db, users)
         create_knowledge_base(db, users)
         create_promotions(db)
+        create_faqs(db)
 
         print("\n" + "=" * 60)
         print("База данных успешно заполнена!")

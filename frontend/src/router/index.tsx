@@ -16,6 +16,8 @@ import { ArticlesPage } from "@/pages/public/ArticlesPage";
 import { ArticleDetailPage } from "@/pages/public/ArticleDetailPage";
 import { FaqPage } from "@/pages/public/FaqPage";
 import { ServicesPage } from "@/pages/public/ServicesPage";
+import { TechnicianPortfolioPage } from "@/pages/public/TechnicianPortfolioPage";
+import { RequirementsPage } from "@/pages/public/RequirementsPage";
 
 // Pages - Auth
 import { LoginPage } from "@/pages/auth/LoginPage";
@@ -24,6 +26,8 @@ import { RegisterPage } from "@/pages/auth/RegisterPage";
 // Pages - Dashboard
 import { ManagerDashboard } from "@/pages/manager/ManagerDashboard";
 import { ManagerOrders } from "@/pages/manager/ManagerOrders";
+import { ManagerOrderDetail } from "@/pages/manager/ManagerOrderDetail";
+import { ManagerUsers } from "@/pages/manager/ManagerUsers";
 import { ManagerGantt } from "@/pages/manager/ManagerGantt";
 import { ManagerClients } from "@/pages/manager/ManagerClients";
 import { ManagerTechnicians } from "@/pages/manager/ManagerTechnicians";
@@ -32,10 +36,13 @@ import { ManagerServices } from "@/pages/manager/ManagerServices";
 import { ManagerPromotions } from "@/pages/manager/ManagerPromotions";
 import { ManagerMaterials } from "@/pages/manager/ManagerMaterials";
 import { ManagerProfile } from "@/pages/manager/ManagerProfile";
+import { SampleOrders } from "@/pages/manager/SampleOrders";
+
 // Pages - Admin
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { AdminUsers } from "@/pages/admin/AdminUsers";
 import { AdminContent } from "@/pages/admin/AdminContent";
+import { AdminFaqs } from "@/pages/admin/AdminFaqs";
 import { AdminReviews } from "@/pages/admin/AdminReviews";
 import { AdminLogs } from "@/pages/admin/AdminLogs";
 import { AdminBackup } from "@/pages/admin/AdminBackup";
@@ -123,9 +130,11 @@ export const AppRouter = () => {
       <Route path="/" element={<HomePage />} />
       <Route path="/calculator" element={<CalculatorPage />} />
       <Route path="/portfolio" element={<PortfolioPage />} />
+      <Route path="/portfolio/:id" element={<TechnicianPortfolioPage />} />
       <Route path="/articles" element={<ArticlesPage />} />
       <Route path="/articles/:slug" element={<ArticleDetailPage />} />
       <Route path="/faq" element={<FaqPage />} />
+      <Route path="/requirements" element={<RequirementsPage />} />
       <Route path="/services" element={<ServicesPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
@@ -199,6 +208,7 @@ const AdminRoutes = () => (
     <Route index element={<AdminDashboard />} />
     <Route path="users" element={<AdminUsers />} />
     <Route path="content" element={<AdminContent />} />
+    <Route path="faqs" element={<AdminFaqs />} />
     <Route path="reviews" element={<AdminReviews />} />
     <Route path="logs" element={<AdminLogs />} />
     <Route path="backup" element={<AdminBackup />} />
@@ -229,7 +239,9 @@ const ManagerRoutes = () => (
   <Routes>
     <Route index element={<ManagerDashboard />} />
     <Route path="orders" element={<ManagerOrders />} />
-    <Route path="orders/:id" element={<TechOrderDetail />} />
+    <Route path="sample-orders" element={<SampleOrders />} />
+    <Route path="orders/:id" element={<ManagerOrderDetail />} />
+    <Route path="users" element={<ManagerUsers />} />
     <Route path="gantt" element={<ManagerGantt />} />
     <Route path="clients" element={<ManagerClients />} />
     <Route path="technicians" element={<ManagerTechnicians />} />
@@ -264,4 +276,3 @@ const TechnicianRoutes = () => (
 export const getDashboardPath = (role: Role): string => {
   return DASHBOARD_ROUTES[role] || "/";
 };
-

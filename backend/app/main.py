@@ -3,7 +3,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Загружаем .env файл перед импортом settings
-env_path = Path(__file__).parent.parent / ".env"
+env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
 from fastapi import FastAPI, Request
@@ -16,13 +16,14 @@ from slowapi.middleware import SlowAPIMiddleware
 from .config import settings
 from .database import Base, engine
 from .dependencies.auth import limiter
-from .models import *  # noqa: F401,F403  - ensure models are imported for Alembic
+from .models import *  # noqa: F401,F403
 from .routers import admin as admin_router
 from .routers import analytics as analytics_router
 from .routers import articles as articles_router
 from .routers import auth as auth_router
 from .routers import calculator as calculator_router
 from .routers import clients as clients_router
+from .routers import faq as faq_router
 from .routers import knowledge_base as knowledge_base_router
 from .routers import materials as materials_router
 from .routers import orders as orders_router
@@ -30,6 +31,9 @@ from .routers import promotions as promotions_router
 from .routers import reviews as reviews_router
 from .routers import services as services_router
 from .routers import technicians as technicians_router
+from .routers import templates as templates_router
+from .routers import export as export_router
+from .routers import notifications as notifications_router
 
 
 def create_app() -> FastAPI:
@@ -58,10 +62,14 @@ def create_app() -> FastAPI:
     app.include_router(auth_router.router, prefix="/api")
     app.include_router(calculator_router.router, prefix="/api")
     app.include_router(clients_router.router, prefix="/api")
+    app.include_router(faq_router.router, prefix="/api")
     app.include_router(materials_router.router, prefix="/api")
     app.include_router(orders_router.router, prefix="/api")
+    app.include_router(notifications_router.router, prefix="/api")
     app.include_router(services_router.router, prefix="/api")
     app.include_router(technicians_router.router, prefix="/api")
+    app.include_router(templates_router.router, prefix="/api")
+    app.include_router(export_router.router, prefix="/api")
     # Вторичные роутеры
     app.include_router(reviews_router.router, prefix="/api")
     app.include_router(articles_router.router, prefix="/api")

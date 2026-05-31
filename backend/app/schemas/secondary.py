@@ -245,6 +245,13 @@ class TechnicianAnalyticsResponse(BaseModel):
     total: int
 
 
+class UserAnalyticsResponse(BaseModel):
+    """Аналитика пользователей."""
+    total: int
+    by_role: Dict[str, int]
+    active: int
+
+
 # =============================================================================
 # Админ (Admin)
 # =============================================================================

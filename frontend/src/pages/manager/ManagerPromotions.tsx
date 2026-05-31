@@ -5,13 +5,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
 
-import { getPromotions, createPromotion, updatePromotion, deletePromotion } from "@/api/manager";
+ import { getPromotions, createPromotion, updatePromotion, deletePromotion, getServices, getServiceCategories } from "@/api/manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
 const promotionSchema = z.object({
@@ -32,20 +33,82 @@ export const ManagerPromotions = () => {
   const [editingPromotion, setEditingPromotion] = useState<any>(null);
 
   const { data: promotionsData } = useQuery({ queryKey: ["manager-promotions"], queryFn: getPromotions });
+  const { data: servicesData } = useQuery({ queryKey: ["manager-services"], queryFn: getServices });
+  const { data: categoriesData } = useQuery({ queryKey: ["service-categories"], queryFn: getServiceCategories });
 
   const promotions = promotionsData?.items || [];
+  const services = servicesData?.items || [];
+  const categories = categoriesData || [];
 
-  const createMutation = useMutation({ mutationFn: createPromotion, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); toast.success("Акция создана"); setModalOpen(false); }, onError: () => toast.error("Ошибка создания") });
-  const updateMutation = useMutation({ mutationFn: ({ id, data }: { id: number; data: any }) => updatePromotion(id, data), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); toast.success("Акция обновлена"); setModalOpen(false); setEditingPromotion(null); }, onError: () => toast.error("Ошибка обновления") });
-  const deleteMutation = useMutation({ mutationFn: deletePromotion, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); toast.success("Акция удалена"); }, onError: () => toast.error("Ошибка удаления") });
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<PromotionFormData>({
-    resolver: zodResolver(promotionSchema),
-    defaultValues: { title: "", description: "", discount_percent: 10, start_date: "", end_date: "", applies_to: "all", target_id: undefined },
+  const createMutation = useMutation({ 
+    mutationFn: createPromotion, 
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); 
+      toast.success("Акция создана"); 
+      setModalOpen(false); 
+    }, 
+    onError: (error: any) => toast.error(error.response?.data?.detail || "Ошибка создания") 
+  });
+  
+  const updateMutation = useMutation({ 
+    mutationFn: ({ id, data }: { id: number; data: any }) => updatePromotion(id, data), 
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); 
+      toast.success("Акция обновлена"); 
+      setModalOpen(false); 
+      setEditingPromotion(null); 
+    }, 
+    onError: (error: any) => toast.error(error.response?.data?.detail || "Ошибка обновления") 
+  });
+  
+  const deleteMutation = useMutation({ 
+    mutationFn: deletePromotion, 
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); 
+      toast.success("Акция удалена"); 
+    }, 
+    onError: (error: any) => toast.error(error.response?.data?.detail || "Ошибка удаления") 
   });
 
-  const openCreate = () => { setEditingPromotion(null); reset({ title: "", description: "", discount_percent: 10, start_date: new Date().toISOString().split("T")[0], end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], applies_to: "all", target_id: undefined }); setModalOpen(true); };
-  const openEdit = (p: any) => { setEditingPromotion(p); reset({ ...p, start_date: p.start_date.split("T")[0], end_date: p.end_date.split("T")[0] }); setModalOpen(true); };
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<PromotionFormData>({
+    resolver: zodResolver(promotionSchema),
+    defaultValues: { 
+      title: "", 
+      description: "", 
+      discount_percent: 10, 
+      start_date: "", 
+      end_date: "", 
+      applies_to: "all", 
+      target_id: undefined 
+    },
+  });
+
+  // Watch the applies_to field to conditionally show target selector
+  const appliesTo = watch('applies_to');
+
+  const openCreate = () => { 
+    setEditingPromotion(null); 
+    reset({ 
+      title: "", 
+      description: "", 
+      discount_percent: 10, 
+      start_date: new Date().toISOString().split("T")[0], 
+      end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0], 
+      applies_to: "all", 
+      target_id: undefined 
+    }); 
+    setModalOpen(true); 
+  };
+  
+  const openEdit = (p: any) => { 
+    setEditingPromotion(p); 
+    reset({ 
+      ...p, 
+      start_date: p.start_date.split("T")[0], 
+      end_date: p.end_date.split("T")[0] 
+    }); 
+    setModalOpen(true); 
+  };
 
   const onSubmit = (data: PromotionFormData) => {
     if (editingPromotion) updateMutation.mutate({ id: editingPromotion.id, data });
@@ -86,8 +149,27 @@ export const ManagerPromotions = () => {
                   </TableCell>
                   <TableCell><Badge variant="default">{p.discount_percent}%</Badge></TableCell>
                   <TableCell>{new Date(p.start_date).toLocaleDateString("ru-RU")} — {new Date(p.end_date).toLocaleDateString("ru-RU")}</TableCell>
-                  <TableCell><Badge variant="outline">{p.applies_to === "all" ? "Всё" : p.applies_to === "service" ? "Услуга" : "Категория"}</Badge></TableCell>
-                  <TableCell><Badge variant={isActive(p) ? "success" : "secondary"}>{isActive(p) ? "Активна" : "Неактивна"}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {(() => {
+                        if (p.applies_to === "all") return "Всё";
+                        if (p.applies_to === "service") {
+                          const service = services.find((s: any) => s.id === p.target_id);
+                          return service ? `Услуга: ${service.name}` : "Услуга";
+                        }
+                        if (p.applies_to === "category") {
+                          const category = categories.find((c: any) => c.id === p.target_id);
+                          return category ? `Категория: ${category.name}` : "Категория";
+                        }
+                        return p.applies_to;
+                      })()}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={(() => isActive(p) ? "success" : "secondary")()}>
+                      {(() => isActive(p) ? "Активна" : "Неактивна")()}
+                    </Badge>
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
@@ -123,6 +205,36 @@ export const ManagerPromotions = () => {
                   <option value="category">Категория</option>
                 </select>
               </div>
+              
+              {(appliesTo === "service" || appliesTo === "category") && (
+                <div>
+                  <Label>
+                    {appliesTo === "service" ? "Услуга" : "Категория"}
+                  </Label>
+                  <select 
+                    {...register("target_id", { 
+                      valueAsNumber: true,
+                      validate: (value) => value !== undefined || "Необходимо выбрать значение" 
+                    })} 
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Выберите {appliesTo === "service" ? "услугу" : "категорию"}</option>
+                    {appliesTo === "service" 
+                      ? services.map((service: any) => (
+                          <option key={service.id} value={service.id}>
+                            {service.name}
+                          </option>
+                        ))
+                      : categories.map((category: any) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                  </select>
+                  {errors.target_id && <p className="text-sm text-destructive">{errors.target_id.message?.toString()}</p>}
+                </div>
+              )}
+              
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Отмена</Button>
                 <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>{createMutation.isPending || updateMutation.isPending ? "Сохранение..." : "Сохранить"}</Button>

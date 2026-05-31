@@ -80,6 +80,9 @@ export const useAuthStore = create<AuthState>()(
         });
         // Очищаем localStorage только для auth-storage
         localStorage.removeItem("auth-storage");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("auth-logout"));
+        }
       },
 
       setTokens: (accessToken, refreshToken) => set((state) => ({

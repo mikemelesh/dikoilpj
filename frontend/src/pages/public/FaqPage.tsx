@@ -3,25 +3,22 @@ import { useEffect, useState } from "react";
 import { apiClient } from "@/api/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PublicLayout } from "@/components/layout/PublicLayout";
-import type { Article } from "@/types";
 import { toast } from "react-toastify";
 
 interface FaqItem {
+  id: number;
   question: string;
   answer: string;
+  category?: string;
 }
 
 export const FaqPage = () => {
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
 
   useEffect(() => {
-    apiClient.get<{ items: Article[] }>(`/articles?category=faq&limit=50`)
+    apiClient.get<FaqItem[]>("/faq")
       .then((res) => {
-        const items = res.data.items.map((article) => ({
-          question: article.title,
-          answer: article.content,
-        }));
-        setFaqs(items);
+        setFaqs(res.data);
       })
       .catch(() => toast.error("Ошибка загрузки FAQ"));
   }, []);
@@ -36,8 +33,8 @@ export const FaqPage = () => {
             </CardContent>
           </Card>
         ) : (
-          faqs.map((faq, index) => (
-            <Card key={index}>
+          faqs.map((faq) => (
+            <Card key={faq.id}>
               <CardHeader>
                 <CardTitle className="text-lg">{faq.question}</CardTitle>
               </CardHeader>

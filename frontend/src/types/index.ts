@@ -39,9 +39,9 @@ export interface Client {
 export interface Technician {
   id: number
   user_id: string
-  user?: User
-  first_name?: string  // Для API техников
-  last_name?: string   // Для API техников
+  user?: User  // Keep for compatibility if used elsewhere
+  first_name?: string  // Directly from API response
+  last_name?: string   // Directly from API response
   specialization?: string
   experience_years: number
   rating: number

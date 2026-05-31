@@ -5,22 +5,23 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
 
-import { getServices, createService, updateService, deleteService } from "@/api/manager";
+import { getServices, createService, updateService, deleteService, getServiceCategories } from "@/api/manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 
 const serviceSchema = z.object({
   name: z.string().min(1, "Название обязательно"),
   category_id: z.coerce.number().min(1, "Выберите категорию"),
   description: z.string().optional(),
-  base_price: z.coerce.number().min(0, "Минимум 0"),
+  base_price: z.coerce.number().min(0, "Отрицательные значения недопустимы"),
   unit: z.string().min(1, "Единица обязательна"),
-  duration_days: z.coerce.number().min(0, "Минимум 0"),
+  duration_days: z.coerce.number().min(0, "Отрицательные значения недопустимы"),
   is_active: z.boolean().default(true),
 });
 
@@ -31,9 +32,18 @@ export const ManagerServices = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<any>(null);
 
-  const { data: servicesData } = useQuery({ queryKey: ["manager-services"], queryFn: getServices });
+  const { data: servicesData } = useQuery({
+    queryKey: ["manager-services"],
+    queryFn: () => getServices(),
+  });
 
-  const services = servicesData?.items || [];
+  const { data: categoriesData } = useQuery({
+    queryKey: ["service-categories"],
+    queryFn: () => getServiceCategories(),
+  });
+
+  const services = (servicesData as any)?.items || [];
+  const categories = (categoriesData as any) || [];
 
   const createMutation = useMutation({
     mutationFn: createService,
@@ -53,12 +63,24 @@ export const ManagerServices = () => {
     onError: () => toast.error("Ошибка удаления"),
   });
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<ServiceFormData>({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<ServiceFormData>({
     resolver: zodResolver(serviceSchema),
     defaultValues: { name: "", category_id: 1, description: "", base_price: 0, unit: "шт", duration_days: 1, is_active: true },
   });
 
-  const openCreate = () => { setEditingService(null); reset({ name: "", category_id: 1, description: "", base_price: 0, unit: "шт", duration_days: 1, is_active: true }); setModalOpen(true); };
+  const openCreate = () => {
+    setEditingService(null);
+    reset({
+      name: "",
+      category_id: categories[0]?.id || 1,
+      description: "",
+      base_price: 0,
+      unit: "шт",
+      duration_days: 1,
+      is_active: true,
+    });
+    setModalOpen(true);
+  };
   const openEdit = (service: any) => { setEditingService(service); reset(service); setModalOpen(true); };
 
   const onSubmit = (data: ServiceFormData) => {
@@ -69,7 +91,9 @@ export const ManagerServices = () => {
     }
   };
 
-  const categories = [...new Set(services?.map((s: any) => s.category?.name || "Без категории"))];
+  const allCategories = [...new Set(services?.map((s: any) => s.category?.name || "Без категории"))];
+
+  const selectedCategoryId = watch("category_id");
 
   return (
     <div className="space-y-6">
@@ -125,18 +149,47 @@ export const ManagerServices = () => {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div><Label>Название</Label><Input {...register("name")} /></div>
               {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-              <div><Label>Категория</Label>
-                <select {...register("category_id")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                  <option value="1">Основная</option>
-                  <option value="2">Дополнительная</option>
-                </select>
+              <div>
+                  <Label>Категория</Label>
+                <Select
+                  value={String(selectedCategoryId ?? categories[0]?.id ?? 1)}
+                  onValueChange={(value) => {
+                    setValue("category_id", Number(value), { shouldDirty: true });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите категорию" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category: any) => (
+                      <SelectItem key={category.id} value={category.id.toString()}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div><Label>Описание</Label><textarea {...register("description")} className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm" /></div>
-              <div className="grid grid-cols-2 gap-4">
-                <div><Label>Цена</Label><Input type="number" step="0.01" {...register("base_price")} /></div>
+<div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Цена</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    {...register("base_price")}
+                  />
+                </div>
                 <div><Label>Единица</Label><Input {...register("unit")} placeholder="шт, этап, работа" /></div>
               </div>
-              <div><Label>Срок выполнения (дней)</Label><Input type="number" {...register("duration_days")} /></div>
+              <div>
+                <Label>Срок выполнения (дней)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  {...register("duration_days")}
+                />
+              </div>
               <div className="flex items-center gap-2"><input type="checkbox" {...register("is_active")} className="h-4 w-4" /><Label>Активна</Label></div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Отмена</Button>

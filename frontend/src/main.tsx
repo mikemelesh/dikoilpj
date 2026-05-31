@@ -6,6 +6,7 @@ import { ToastContainer } from "react-toastify";
 import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
+import { AuthQueryCacheListener } from "./components/AuthQueryCacheListener";
 import "./index.css";
 
 import "react-toastify/dist/ReactToastify.css";
@@ -23,6 +24,7 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
+      <AuthQueryCacheListener />
       <BrowserRouter>
         <App />
       </BrowserRouter>

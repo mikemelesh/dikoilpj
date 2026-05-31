@@ -13,11 +13,14 @@ from .order import (
     OrderFile,
     OrderStatusHistory,
 )
+from .order_template import OrderTemplate
 from .review import Review
 from .article import Article
 from .promotion import Promotion, PromotionAppliesTo
 from .knowledge import KnowledgeBase
 from .logging import ActionLog
+from .faq import Faq
+from .notification import Notification
 
 __all__ = [
     "User",
@@ -36,11 +39,14 @@ __all__ = [
     "OrderStatusHistory",
     "MaterialRequest",
     "MaterialRequestStatus",
+    "OrderTemplate",
     "Review",
     "Article",
     "Promotion",
     "PromotionAppliesTo",
     "KnowledgeBase",
     "ActionLog",
+    "Faq",
+    "Notification",
 ]
 

@@ -88,19 +88,15 @@ async def get_articles(
 async def get_article(
     slug: str,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_active_user),
 ):
     """
     Получить статью по слагy.
-    Публичный эндпоинт (опубликованные) или для авторизованных (все).
+    Публичный эндпоинт (опубликованные).
     """
-    query = db.query(Article).filter(Article.slug == slug)
-
-    # Если не админ, показываем только опубликованные
-    if not current_user or current_user.role not in [UserRole.ADMIN, UserRole.MANAGER]:
-        query = query.filter(Article.is_published == True)
-
-    article = query.first()
+    article = db.query(Article).filter(
+        Article.slug == slug,
+        Article.is_published == True
+    ).first()
 
     if not article:
         raise HTTPException(

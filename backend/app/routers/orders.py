@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
@@ -27,10 +27,12 @@ from ..models.service import Service
 from ..models.technician import Technician
 from ..models.user import User, UserRole
 from ..schemas.order import (
+    OrderAssignManagerRequest,
     OrderAssignRequest,
     OrderCreate,
     OrderFileResponse,
     OrderListResponse,
+    OrderManagerPricingUpdate,
     OrderResponse,
     OrderStatusUpdate,
     OrderSummaryResponse,
@@ -39,6 +41,7 @@ from ..schemas.order import (
 from ..utils.files import save_file, validate_file
 from ..utils.loyalty import apply_client_discount, update_client_loyalty
 from ..utils.security import log_action
+from ..utils.notifications import create_order_status_notification
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -46,6 +49,38 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 # =============================================================================
 # Вспомогательные функции
 # =============================================================================
+
+
+def _orders_list_order_by(query):
+    """Срочные и просроченные дедлайны / critical — в начале списка."""
+    today = date.today()
+    terminal_statuses = [
+        OrderStatus.COMPLETED,
+        OrderStatus.CANCELLED,
+        OrderStatus.ARCHIVED,
+    ]
+    overdue_rank = case(
+        (
+            and_(
+                Order.deadline.isnot(None),
+                Order.deadline < today,
+                Order.status.notin_(terminal_statuses),
+            ),
+            0,
+        ),
+        else_=1,
+    )
+    priority_rank = case(
+        (Order.priority == OrderPriority.CRITICAL, 0),
+        (Order.priority == OrderPriority.URGENT, 1),
+        else_=2,
+    )
+    return query.order_by(
+        overdue_rank,
+        priority_rank,
+        Order.deadline.asc().nullslast(),
+        Order.created_at.desc(),
+    )
 
 
 def generate_order_number() -> str:
@@ -184,6 +219,9 @@ async def get_orders(
     date_to: Optional[date] = Query(None),
     client_id: Optional[int] = Query(None),
     technician_id: Optional[int] = Query(None),
+    search: Optional[str] = Query(None, min_length=1),
+    sort_by: Optional[str] = Query(None, description="Поле сортировки"),
+    sort_dir: Optional[str] = Query("asc", description="asc|desc"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -252,19 +290,85 @@ async def get_orders(
     if technician_id is not None:
         query = query.filter(Order.technician_id == technician_id)
 
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                Order.order_number.ilike(pattern),
+                Order.client.has(
+                    or_(
+                        Client.clinic_name.ilike(pattern),
+                        Client.user.has(
+                            or_(
+                                User.first_name.ilike(pattern),
+                                User.last_name.ilike(pattern),
+                                User.email.ilike(pattern),
+                            )
+                        ),
+                    )
+                ),
+            )
+        )
+
+    # Сортировка
+    # По умолчанию используем старую "smart" сортировку (overdue/priority/deadline/created)
+    if sort_by:
+        allowed_sort_by = {
+            "order_number": Order.order_number,
+            "created_at": Order.created_at,
+            "deadline": Order.deadline,
+            "status": Order.status,
+            "priority": Order.priority,
+            "final_price": Order.final_price,
+        }
+
+        # Для сортировки по именам нужно явно делать JOIN на User.
+        # В противном случае ORDER BY по User.* не сможет отрендериться корректно.
+        if sort_by in {"client_name"}:
+            query = query.join(Order.client).join(Client.user)
+            allowed_sort_by["client_name"] = func.concat(
+                func.coalesce(User.first_name, ""),
+                func.concat(" ", func.coalesce(User.last_name, "")),
+            )
+
+        if sort_by in {"technician_name"}:
+            query = query.join(Order.technician).join(Technician.user)
+            allowed_sort_by["technician_name"] = func.concat(
+                func.coalesce(User.first_name, ""),
+                func.concat(" ", func.coalesce(User.last_name, "")),
+            )
+
+        allowed_dir = {"asc", "desc"}
+        if sort_dir not in allowed_dir:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="sort_dir должен быть asc или desc")
+
+        sort_col = allowed_sort_by.get(sort_by)
+        if not sort_col:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Недопустимое sort_by")
+
+        if sort_dir == "desc":
+            query = query.order_by(sort_col.desc().nullslast() if hasattr(sort_col, "nullslast") else sort_col.desc())
+        else:
+            query = query.order_by(sort_col.asc().nullslast() if hasattr(sort_col, "nullslast") else sort_col.asc())
+    else:
+        query = _orders_list_order_by(query)
+
     # Пагинация
     total = query.count()
     pages = math.ceil(total / limit) if total > 0 else 0
     offset = (page - 1) * limit
-    orders = query.order_by(Order.created_at.desc()).offset(offset).limit(limit).all()
+    orders = query.offset(offset).limit(limit).all()
 
     # Формируем ответ
     items = []
     for order in orders:
-        # Формируем technician_name
         technician_name = None
         if order.technician and order.technician.user:
             technician_name = f"{order.technician.user.first_name} {order.technician.user.last_name}"
+
+        client_name = None
+        if order.client and order.client.user:
+            client_name = f"{order.client.user.first_name} {order.client.user.last_name}".strip()
 
         items.append(OrderSummaryResponse(
             id=str(order.id),
@@ -274,6 +378,8 @@ async def get_orders(
             final_price=order.final_price,
             created_at=order.created_at,
             deadline=order.deadline,
+            client_id=order.client_id,
+            client_name=client_name,
             technician_id=order.technician_id,
             technician_name=technician_name,
         ))
@@ -495,6 +601,79 @@ async def update_order(
 
 
 # =============================================================================
+# Корректировка цены менеджером (до подтверждения)
+# =============================================================================
+
+
+@router.patch("/{order_id}/pricing", response_model=OrderResponse)
+async def manager_update_order_pricing(
+    order_id: str,
+    pricing_data: OrderManagerPricingUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["manager", "admin"])),
+):
+    """
+    Изменить цену заказа до подтверждения (только status=new).
+    """
+    order = get_order_with_relations(db, order_id)
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Заказ не найден")
+
+    if order.status != OrderStatus.NEW:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Цену можно менять только для новых заказов",
+        )
+
+    if pricing_data.items:
+        items_by_id = {item.id: item for item in order.items}
+        for row in pricing_data.items:
+            item = items_by_id.get(row.id)
+            if not item:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Позиция заказа {row.id} не найдена",
+                )
+            qty = row.quantity if row.quantity is not None else item.quantity
+            item.quantity = qty
+            item.unit_price = Decimal(str(row.unit_price))
+            item.total_price = item.unit_price * qty
+        order.total_price = sum((i.total_price for i in order.items), Decimal("0"))
+
+    client = order.client
+    if pricing_data.discount_amount is not None:
+        order.discount_amount = Decimal(str(pricing_data.discount_amount))
+    elif pricing_data.items and client:
+        order.discount_amount, order.final_price, _ = apply_client_discount(order.total_price, client)
+
+    if pricing_data.final_price is not None:
+        order.final_price = Decimal(str(pricing_data.final_price))
+        if pricing_data.discount_amount is None:
+            order.discount_amount = max(order.total_price - order.final_price, Decimal("0"))
+    elif client and pricing_data.discount_amount is None and not pricing_data.items:
+        order.discount_amount, order.final_price, _ = apply_client_discount(order.total_price, client)
+    else:
+        order.final_price = max(order.total_price - order.discount_amount, Decimal("0"))
+
+    if pricing_data.notes is not None:
+        order.notes = pricing_data.notes
+
+    db.commit()
+    db.refresh(order)
+
+    log_action(
+        db=db,
+        user_id=str(current_user.id),
+        action_type="update_order_pricing",
+        entity_type="order",
+        entity_id=str(order.id),
+        description=f"Менеджер скорректировал цену заказа {order.order_number}",
+    )
+
+    return get_order_response(db, order)
+
+
+# =============================================================================
 # Изменение статуса заказа
 # =============================================================================
 
@@ -567,6 +746,18 @@ async def update_order_status(
         client = order.client
         update_client_loyalty(db, client, order.final_price)
 
+    # Уведомление клиенту об изменении статуса
+    if order.client and order.client.user_id:
+        create_order_status_notification(
+            db,
+            recipient_id=str(order.client.user_id),
+            order_id=str(order.id),
+            order_number=order.order_number,
+            old_status=old_status,
+            new_status=new_status,
+            sender_id=str(current_user.id),
+        )
+
     db.commit()
     db.refresh(order)
 
@@ -635,6 +826,49 @@ async def assign_technician(
 
     return get_order_response(db, order)
 
+
+@router.patch("/{order_id}/assign-manager", response_model=OrderResponse)
+async def assign_manager(
+    order_id: str,
+    assign_data: OrderAssignManagerRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["manager", "admin"])),
+):
+    """
+    Назначить менеджера на заказ.
+    Доступно: manager, admin.
+    """
+    order = get_order_with_relations(db, order_id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Заказ не найден"
+        )
+
+    # Проверяем менеджера
+    manager = db.query(User).filter(User.id == assign_data.manager_id, User.role == UserRole.MANAGER).first()
+    if not manager:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Менеджер не найден"
+        )
+
+    old_manager_id = order.manager_id
+    order.manager_id = assign_data.manager_id
+
+    db.commit()
+    db.refresh(order)
+
+    log_action(
+        db=db,
+        user_id=str(current_user.id),
+        action_type="assign_manager",
+        entity_type="order",
+        entity_id=str(order.id),
+        description=f"Назначен менеджер {manager.first_name} {manager.last_name}",
+    )
+
+    return get_order_response(db, order)
 
 # =============================================================================
 # Файлы заказов
@@ -746,3 +980,82 @@ async def delete_order_file(
     )
 
     return None
+
+
+@router.post("/{order_id}/duplicate", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+async def duplicate_order(
+    order_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["client"])),
+):
+    """
+    Повторить заказ из архива.
+    Доступно: client (только свои заказы).
+    """
+
+    order = get_order_with_relations(db, order_id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Заказ не найден"
+        )
+
+    # Проверка клиента
+    client_profile = db.query(Client).filter(Client.user_id == current_user.id).first()
+    if not client_profile or order.client_id != client_profile.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Доступ запрещён"
+        )
+
+    # Создаём копию заказа
+    new_order = Order(
+        order_number=generate_order_number(),
+        client_id=order.client_id,
+        status=OrderStatus.NEW,
+        priority=order.priority,
+        total_price=order.total_price,
+        discount_amount=order.discount_amount,
+        final_price=order.final_price,
+        notes=order.notes,
+        deadline=order.deadline,
+    )
+    db.add(new_order)
+    db.flush()  # Получаем ID для items
+
+
+    # Копируем позиции
+    for item in order.items:
+        new_item = OrderItem(
+            order_id=new_order.id,
+            service_id=item.service_id,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            total_price=item.total_price,
+            specifications=item.specifications,
+        )
+        db.add(new_item)
+
+    # История
+    create_status_history(
+        db,
+        new_order,
+        OrderStatus.NEW,
+        OrderStatus.NEW,
+        current_user,
+        f"Повтор заказа {order.order_number}",
+    )
+
+    db.commit()
+    db.refresh(new_order)
+
+    log_action(
+        db=db,
+        user_id=str(current_user.id),
+        action_type="duplicate_order",
+        entity_type="order",
+        entity_id=str(new_order.id),
+        description=f"Повторён заказ из {order.order_number}",
+    )
+
+    return get_order_response(db, new_order)

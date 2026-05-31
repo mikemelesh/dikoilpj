@@ -22,6 +22,7 @@ from ..schemas.secondary import (
     RevenueByPeriod,
     TechnicianAnalyticsItem,
     TechnicianAnalyticsResponse,
+    UserAnalyticsResponse,
 )
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -225,6 +226,34 @@ async def get_technician_analytics(
         ))
     
     return TechnicianAnalyticsResponse(items=items, total=len(items))
+
+
+@router.get("/users", response_model=UserAnalyticsResponse)
+async def get_user_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["manager", "admin"])),
+):
+    """
+    Аналитика по пользователям.
+    Доступно: manager, admin.
+    """
+    # Общее количество
+    total = db.query(func.count(User.id)).scalar() or 0
+
+    # По ролям
+    by_role = {}
+    for role in UserRole:
+        count = db.query(func.count(User.id)).filter(User.role == role).scalar() or 0
+        by_role[role.value] = count
+
+    # Активные
+    active = db.query(func.count(User.id)).filter(User.is_active == True).scalar() or 0
+
+    return UserAnalyticsResponse(
+        total=total,
+        by_role=by_role,
+        active=active,
+    )
 
 
 # Импортируем OrderItem для revenue analytics

@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { getOrders } from "@/api/orders";
+import { clientOrdersQueryOptions } from "@/lib/clientOrdersQuery";
 import { SearchAndFilter, type FilterConfig } from "@/components/shared/SearchAndFilter";
+import { ExportButton } from "@/components/shared/ExportButton";
 import { Pagination } from "@/components/shared/Pagination";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,19 +16,34 @@ import type { Order } from "@/types";
 export const ClientOrders = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string | string[]>>({});
+  const [sortBy, setSortBy] = useState<string>("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const limit = 10;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["client-orders", page, search, filters],
+    queryKey: ["client-orders", page, search, filters, sortBy, sortDir],
     queryFn: () => getOrders({
       page,
       limit,
-      status: filters.status || undefined,
-      date_from: filters.date_from,
-      date_to: filters.date_to,
+      status: (filters.status as string[]) || undefined,
+      date_from: filters.date_from as string,
+      date_to: filters.date_to as string,
+      sort_by: sortBy,
+      sort_dir: sortDir,
     }),
+    ...clientOrdersQueryOptions,
   });
+
+  const onChangeSortBy = (value: string) => {
+    setSortBy(value);
+    setPage(1);
+  };
+
+  const toggleSortDir = () => {
+    setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    setPage(1);
+  };
 
   const filterConfigs: FilterConfig[] = [
     {
@@ -47,15 +64,26 @@ export const ClientOrders = () => {
     { key: "date_to", label: "Дата до", type: "date" },
   ];
 
+  const exportFilters = {
+    status: filters.status as string[],
+    date_from: filters.date_from as string,
+    date_to: filters.date_to as string,
+    page: page,
+    limit: limit,
+  } as any;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Мои заказы</h1>
-        <Link to="/client/orders/new">
-          <Button>
-            <span className="mr-2">+</span> Новый заказ
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <ExportButton filters={exportFilters} title="Мои заказы" />
+          <Link to="/client/orders/new">
+            <Button>
+              <span className="mr-2">+</span> Новый заказ
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <SearchAndFilter
@@ -64,6 +92,34 @@ export const ClientOrders = () => {
         filters={filterConfigs}
         searchPlaceholder="Поиск по номеру заказа..."
       />
+
+      <Card>
+        <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-sm text-muted-foreground">
+            Сортировка
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-muted-foreground">Поле</label>
+            <select
+              value={sortBy}
+              onChange={(e) => onChangeSortBy(e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="created_at">Создан</option>
+              <option value="deadline">Дедлайн</option>
+              <option value="order_number">Номер</option>
+              <option value="status">Статус</option>
+              <option value="priority">Приоритет</option>
+              <option value="final_price">Сумма</option>
+            </select>
+
+            <Button variant="outline" size="sm" onClick={toggleSortDir}>
+              {sortDir === "asc" ? "↑" : "↓"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {isLoading ? (
         <div className="space-y-4">

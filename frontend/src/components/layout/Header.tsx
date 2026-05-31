@@ -7,6 +7,7 @@ import { cn } from "@/utils";
 
 import { Menu, User, LogOut, ChevronDown, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 // =============================================================================
 // Компонент Header
@@ -62,6 +63,8 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
       {/* Right: Navigation or User dropdown */}
       <div className="flex items-center gap-4">
         {isAuthenticated && user ? (
+          <div className="flex items-center gap-1">
+            {user.role === "client" && <NotificationBell />}
           <div className="relative">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -104,6 +107,7 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
                 </div>
               </>
             )}
+          </div>
           </div>
         ) : (
           <nav className="hidden md:flex items-center gap-6">

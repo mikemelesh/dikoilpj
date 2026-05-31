@@ -51,15 +51,24 @@ export const TechProfile = () => {
     queryFn: getMaterials,
   });
 
-  const updateProfileMutation = useMutation({
-    mutationFn: (data: ProfileFormData) => updateTechnicianProfile(data),
-    onSuccess: (res) => {
-      updateUser(res.user);
-      queryClient.invalidateQueries({ queryKey: ["current-technician"] });
+  const updateMutation = useMutation({
+    mutationFn: (data: ProfileFormData) => {
+      // Clean the data to remove empty strings
+      const cleanedData = {
+        first_name: data.first_name || null,
+        last_name: data.last_name || null,
+        phone: data.phone || null,
+      };
+      return apiClient.put("/auth/profile", cleanedData);
+    },
+    onSuccess: () => {
       toast.success("Профиль обновлён");
       setIsEditing(false);
     },
-    onError: () => toast.error("Ошибка обновления профиля"),
+    onError: (error: any) => {
+      console.error("Profile update error:", error);
+      toast.error(error.response?.data?.detail || "Ошибка обновления");
+    },
   });
 
   const createRequestMutation = useMutation({
@@ -87,7 +96,7 @@ export const TechProfile = () => {
   });
 
   const onSubmitProfile = (data: ProfileFormData) => {
-    updateProfileMutation.mutate(data);
+    updateMutation.mutate(data);
   };
 
   const onSubmitRequest = (data: MaterialRequestData) => {

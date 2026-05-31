@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Phone } from "lucide-react";
+import { PhoneInput } from "@/components/shared/PhoneInput";
 
 // =============================================================================
 // Схемы форм
@@ -20,7 +21,9 @@ import { User, Mail, Phone } from "lucide-react";
 const profileSchema = z.object({
   first_name: z.string().min(1, "Введите имя"),
   last_name: z.string().min(1, "Введите фамилию"),
-  phone: z.string().optional(),
+  phone: z.string()
+    .regex(/^(\+375\d{9}|(\+375 \(\d{2}\) \d{3}-\d{2}-\d{2})?)$/, "Введите корректный белорусский номер телефона")
+    .optional(),
 });
 
 const passwordSchema = z.object({
@@ -46,6 +49,7 @@ type PasswordFormData = z.infer<typeof passwordSchema>;
 export const ClientProfile = () => {
   const { user, updateUser } = authStore();
   const [isEditing, setIsEditing] = useState(false);
+  const [phoneValue, setPhoneValue] = useState(user?.phone || "");
 
   const { register: registerProfile, handleSubmit: handleSubmitProfile, formState: { errors: profileErrors } } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -60,14 +64,24 @@ export const ClientProfile = () => {
     resolver: zodResolver(passwordSchema),
   });
 
-  const updateProfileMutation = useMutation({
-    mutationFn: (data: ProfileFormData) => apiClient.put("/auth/me", data),
-    onSuccess: (res) => {
-      updateUser(res.data);
+  const updateMutation = useMutation({
+    mutationFn: (data: ProfileFormData) => {
+      // Clean the data to remove empty strings
+      const cleanedData = {
+        first_name: data.first_name || null,
+        last_name: data.last_name || null,
+        phone: phoneValue || null,
+      };
+      return apiClient.put("/auth/profile", cleanedData);
+    },
+    onSuccess: () => {
       toast.success("Профиль обновлён");
       setIsEditing(false);
     },
-    onError: () => toast.error("Ошибка обновления профиля"),
+    onError: (error: any) => {
+      console.error("Profile update error:", error);
+      toast.error(error.response?.data?.detail || "Ошибка обновления");
+    },
   });
 
   const changePasswordMutation = useMutation({
@@ -91,7 +105,7 @@ export const ClientProfile = () => {
           <CardDescription>Ваши контактные данные</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form onSubmit={handleSubmitProfile((data) => updateProfileMutation.mutate(data))}>
+          <form onSubmit={handleSubmitProfile((data) => updateMutation.mutate(data))}>
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
@@ -135,13 +149,16 @@ export const ClientProfile = () => {
                 <Label htmlFor="phone">Телефон</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
+                  <PhoneInput
                     id="phone"
                     className="pl-10"
-                    {...registerProfile("phone")}
+                    value={phoneValue}
+                    onChange={setPhoneValue}
                     disabled={!isEditing}
+                    placeholder="+375 (XX) XXX-XX-XX"
                   />
                 </div>
+                {profileErrors.phone && <p className="text-sm text-destructive">{profileErrors.phone.message}</p>}
               </div>
             </div>
 

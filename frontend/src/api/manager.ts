@@ -1,5 +1,5 @@
 import { apiClient } from "./axios";
-import type { Client, Technician, Service, Promotion, Order, MaterialRequest } from "@/types";
+import type { Client, Technician, Service, Promotion, Order, Material, MaterialRequest } from "@/types";
 
 // =============================================================================
 // Типы запросов/ответов
@@ -32,6 +32,15 @@ export interface ApproveMaterialRequestData {
   comment?: string;
 }
 
+export interface ServiceCategory {
+  id: number;
+  name: string;
+  description?: string;
+  icon_url?: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
 // =============================================================================
 // API функции
 // =============================================================================
@@ -59,12 +68,16 @@ export const getRevenueAnalytics = async (): Promise<RevenueAnalytics> => {
 /**
  * Получение списка клиентов
  */
-export const getClients = async (params?: { page?: number; limit?: number; search?: string }): Promise<{ items: Client[]; total: number }> => {
+export const getClients = async (
+  params?: { page?: number; limit?: number; search?: string; sort_by?: string; sort_dir?: "asc" | "desc" }
+): Promise<{ items: Client[]; total: number }> => {
   const queryParams = new URLSearchParams();
   if (params?.page) queryParams.append("page", String(params.page));
   if (params?.limit) queryParams.append("limit", String(params.limit));
   if (params?.search) queryParams.append("search", params.search);
-  
+  if (params?.sort_by) queryParams.append("sort_by", params.sort_by);
+  if (params?.sort_dir) queryParams.append("sort_dir", params.sort_dir);
+
   const response = await apiClient.get(`/clients?${queryParams}`);
   return response.data;
 };
@@ -129,6 +142,37 @@ export const updateService = async (id: number, data: Partial<{ name: string; ca
  */
 export const deleteService = async (id: number): Promise<void> => {
   await apiClient.delete(`/services/${id}`);
+};
+
+/**
+ * Получение списка категорий услуг
+ */
+export const getServiceCategories = async (): Promise<ServiceCategory[]> => {
+  const response = await apiClient.get<ServiceCategory[]>('/services/categories');
+  return response.data;
+};
+
+/**
+ * Создание новой категории услуг
+ */
+export const createServiceCategory = async (data: Omit<ServiceCategory, 'id'>): Promise<ServiceCategory> => {
+  const response = await apiClient.post<ServiceCategory>('/services/categories', data);
+  return response.data;
+};
+
+/**
+ * Обновление категории услуг
+ */
+export const updateServiceCategory = async (id: number, data: Partial<Omit<ServiceCategory, 'id'>>): Promise<ServiceCategory> => {
+  const response = await apiClient.put<ServiceCategory>(`/services/categories/${id}`, data);
+  return response.data;
+};
+
+/**
+ * Удаление категории услуг
+ */
+export const deleteServiceCategory = async (id: number): Promise<void> => {
+  await apiClient.delete(`/services/categories/${id}`);
 };
 
 /**

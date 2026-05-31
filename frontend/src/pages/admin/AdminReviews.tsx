@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Star, Check, X } from "lucide-react";
+import { Star, Check, X, Download } from "lucide-react";
+import { ExportButton } from "@/components/shared/ExportButton";
 
 interface Review { id: number; client_id: number; client_name?: string; order_id?: string; order_number?: string; rating: number; text?: string; is_moderated: boolean; is_published: boolean; created_at: string }
 
@@ -23,13 +24,14 @@ export const AdminReviews = () => {
     onError: () => toast.error("Ошибка обновления"),
   });
 
-  const reviews = tab === "pending" ? pendingData?.items?.filter(r => !r.is_published) || [] : allData?.items || [];
+  const reviews = tab === "pending" ? pendingData?.items?.filter(r => !r.is_moderated) || [] : allData?.items || [];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Отзывы</h1>
         <div className="flex gap-2">
+          <ExportButton resource="reviews" title="Отзывы" />
           <Button variant={tab === "pending" ? "default" : "outline"} size="sm" onClick={() => setTab("pending")}>На модерации</Button>
           <Button variant={tab === "all" ? "default" : "outline"} size="sm" onClick={() => setTab("all")}>Все отзывы</Button>
         </div>
@@ -68,13 +70,29 @@ export const AdminReviews = () => {
                     <TableCell className="max-w-xs truncate">{review.text || "—"}</TableCell>
                     <TableCell>{new Date(review.created_at).toLocaleDateString("ru-RU")}</TableCell>
                     <TableCell>
-                      <Badge variant={review.is_published ? "success" : "secondary"}>{review.is_published ? "Опубликован" : review.is_moderated ? "Отклонён" : "На модерации"}</Badge>
+                      <Badge variant={review.is_published ? "success" : review.is_moderated ? "secondary" : "outline"}>
+                        {review.is_published ? "Опубликован" : review.is_moderated ? "Отклонён" : "На модерации"}
+                      </Badge>
                     </TableCell>
                     {tab === "pending" && (
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button variant="outline" size="sm" onClick={() => moderateMutation.mutate({ id: review.id, is_published: true })}><Check className="h-4 w-4 text-green-600" /></Button>
-                          <Button variant="outline" size="sm" onClick={() => moderateMutation.mutate({ id: review.id, is_published: false })}><X className="h-4 w-4 text-red-600" /></Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => moderateMutation.mutate({ id: review.id, is_published: true })}
+                            title="Одобрить"
+                          >
+                            <Check className="h-4 w-4 text-green-600" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => moderateMutation.mutate({ id: review.id, is_published: false })}
+                            title="Отклонить"
+                          >
+                            <X className="h-4 w-4 text-red-600" />
+                          </Button>
                         </div>
                       </TableCell>
                     )}

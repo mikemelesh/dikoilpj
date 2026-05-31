@@ -1,0 +1,10 @@
+<parameter name="content"># Export Reports Plan
+
+Steps:
+- [ ] Install python-docx openpyxl
+- [ ] Create utils/export.py (excel/docx gen)
+- [ ] Create routers/export.py endpoint
+- [ ] Update frontend SearchAndFilter with Export button
+- [ ] Test orders export
+- [ ] Complete
+</parameter>

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/axios";
+import { clientOrdersQueryOptions } from "@/lib/clientOrdersQuery";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock, Package, CheckCircle } from "lucide-react";
@@ -20,14 +21,13 @@ export const ClientDashboard = () => {
     queryKey: ["client-dashboard-orders"],
     queryFn: () => apiClient.get<{ items: OrderSummary[]; total: number }>("/orders?limit=5").then(r => r.data),
     retry: 2,
+    ...clientOrdersQueryOptions,
   });
 
   const orders = ordersData?.items || [];
   const newOrders = orders.filter((o) => o.status === "new" || o.status === "confirmed").length;
   const inProgress = orders.filter((o) => o.status === "in_progress" || o.status === "review").length;
   const completed = orders.filter((o) => o.status === "completed").length;
-
-  console.log("Client Dashboard Data:", { ordersData, orders });
 
   return (
     <div className="space-y-6">

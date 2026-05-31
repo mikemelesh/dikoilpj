@@ -1,0 +1,9 @@
+<parameter name="content"># Repeat Orders from Archive
+
+## Steps:
+- [ ] Add backend /api/orders/{id}/duplicate endpoint
+- [ ] Add frontend api/orders.ts duplicateOrder()
+- [ ] Add button in ClientArchive.tsx 
+- [ ] Test feature
+- [ ] Complete
+</parameter>

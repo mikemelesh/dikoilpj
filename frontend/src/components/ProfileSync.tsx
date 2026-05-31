@@ -13,7 +13,7 @@ export const ProfileSync = () => {
   const queryClient = useQueryClient();
 
   // Загружаем данные из /auth/me при каждом изменении isAuthenticated
-  const { data: meData, isLoading: isMeLoading, error: meError } = useQuery({
+  const { data: meData, error: meError } = useQuery({
     queryKey: ["current-user-profile"],
     queryFn: getMe,
     enabled: isAuthenticated,
@@ -31,21 +31,26 @@ export const ProfileSync = () => {
     staleTime: 5 * 60 * 1000, // 5 минут
   });
 
-  // Обновляем данные пользователя при загрузке
+  // Обновляем данные пользователя при загрузке (игнорируем устаревший кэш другого пользователя)
   useEffect(() => {
-    if (meData && meData.user) {
-      updateUser({
-        id: meData.user.id,
-        email: meData.user.email,
-        first_name: meData.user.first_name,
-        last_name: meData.user.last_name,
-        phone: meData.user.phone,
-        role: meData.user.role,
-        client_profile: meData.client_profile,
-        technician_profile: meData.technician_profile || technicianData,
-      });
+    if (!meData?.user) return;
+
+    const currentUser = useAuthStore.getState().user;
+    if (currentUser?.id && meData.user.id !== currentUser.id) {
+      return;
     }
-  }, [meData, technicianData]);
+
+    updateUser({
+      id: meData.user.id,
+      email: meData.user.email,
+      first_name: meData.user.first_name,
+      last_name: meData.user.last_name,
+      phone: meData.user.phone,
+      role: meData.user.role,
+      client_profile: meData.client_profile,
+      technician_profile: meData.technician_profile || technicianData,
+    });
+  }, [meData, technicianData, updateUser]);
 
   // Обработка ошибки - logout при 401
   useEffect(() => {
@@ -55,17 +60,6 @@ export const ProfileSync = () => {
       queryClient.clear();
     }
   }, [meError]);
-
-  // Слушаем событие логина для инвалидации кэша
-  useEffect(() => {
-    const handleLogin = () => {
-      queryClient.invalidateQueries({ queryKey: ["current-user-profile"] });
-      queryClient.invalidateQueries({ queryKey: ["current-technician-full"] });
-    };
-
-    window.addEventListener('auth-login', handleLogin);
-    return () => window.removeEventListener('auth-login', handleLogin);
-  }, [queryClient]);
 
   return null;
 };

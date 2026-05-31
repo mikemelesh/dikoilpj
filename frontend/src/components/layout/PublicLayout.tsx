@@ -34,6 +34,7 @@ export const PublicLayout = ({ children, title }: PublicLayoutProps) => {
     { path: "/services", label: "Услуги" },
     { path: "/calculator", label: "Калькулятор" },
     { path: "/portfolio", label: "Портфолио" },
+    { path: "/requirements", label: "Требования" },
     { path: "/articles", label: "Статьи" },
     { path: "/faq", label: "FAQ" },
   ];

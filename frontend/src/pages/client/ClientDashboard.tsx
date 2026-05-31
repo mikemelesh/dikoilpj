@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { ExportButton } from "@/components/shared/ExportButton";
 import { Package, Plus, Clock, ChevronRight } from "lucide-react";
 import type { Order } from "@/types";
 
@@ -55,6 +56,11 @@ export const ClientDashboard = () => {
   const { next, progress } = getLoyaltyProgress(totalOrders, loyaltyTier);
   const nextTier = next ? LOYALTY_TIERS[next as keyof typeof LOYALTY_TIERS] : null;
 
+  const exportFilters = {
+    status: ["new", "confirmed", "in_progress"],
+    limit: 5,
+  };
+
   return (
     <div className="space-y-8">
       {/* Приветствие + лояльность */}
@@ -99,6 +105,7 @@ export const ClientDashboard = () => {
                 Новый заказ
               </Button>
             </Link>
+            <ExportButton filters={exportFilters} title="Активные заказы" className="w-full mt-2" />
             <Link to="/client/orders">
               <Button variant="outline" className="w-full mt-2">
                 Все заказы

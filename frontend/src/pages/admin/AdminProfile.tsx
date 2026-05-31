@@ -11,11 +11,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Phone, Save, X, Shield } from "lucide-react";
+import { PhoneInput } from "@/components/shared/PhoneInput";
 
 const profileSchema = z.object({
   first_name: z.string().optional(),
   last_name: z.string().optional(),
-  phone: z.string().optional(),
+  phone: z.string()
+    .regex(/^(\+375\d{9}|(\+375 \(\d{2}\) \d{3}-\d{2}-\d{2})?)$/, "Введите корректный белорусский номер телефона")
+    .optional(),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
@@ -23,6 +26,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 export const AdminProfile = () => {
   const { user } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
+  const [phoneValue, setPhoneValue] = useState(user?.phone || "");
 
   const { register, handleSubmit, reset } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
@@ -34,12 +38,23 @@ export const AdminProfile = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: ProfileFormData) => apiClient.put("/auth/profile", data),
+    mutationFn: (data: ProfileFormData) => {
+      // Clean the data to remove empty strings
+      const cleanedData = {
+        first_name: data.first_name || null,
+        last_name: data.last_name || null,
+        phone: phoneValue || null,
+      };
+      return apiClient.put("/auth/profile", cleanedData);
+    },
     onSuccess: () => {
       toast.success("Профиль обновлён");
       setIsEditing(false);
     },
-    onError: () => toast.error("Ошибка обновления"),
+    onError: (error: any) => {
+      console.error("Profile update error:", error);
+      toast.error(error.response?.data?.detail || "Ошибка обновления");
+    },
   });
 
   const onSubmit = (data: ProfileFormData) => {
@@ -110,12 +125,13 @@ export const AdminProfile = () => {
               <Label htmlFor="phone">Телефон</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
+                <PhoneInput
                   id="phone"
-                  {...register("phone")}
+                  value={phoneValue}
+                  onChange={setPhoneValue}
                   disabled={!isEditing || updateMutation.isPending}
                   className="pl-10"
-                  placeholder="+7 (___) ___-__-__"
+                  placeholder="+375 (XX) XXX-XX-XX"
                 />
               </div>
             </div>

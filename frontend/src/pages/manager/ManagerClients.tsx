@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search } from "lucide-react";
+import { ExportButton } from "@/components/shared/ExportButton";
+import { SearchAndFilter, type FilterConfig } from "@/components/shared/SearchAndFilter";
+import { toExportFilters } from "@/lib/exportFilters";
 
 const TIER_COLORS: Record<string, string> = {
   bronze: "bg-amber-700", silver: "bg-gray-400", gold: "bg-yellow-500", platinum: "bg-blue-400",
@@ -19,12 +21,26 @@ export const ManagerClients = () => {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [editModal, setEditModal] = useState<{ clientId: number; open: boolean; discount: number; tier: string }>({ clientId: 0, open: false, discount: 0, tier: "bronze" });
   const limit = 20;
 
+  const [sortBy, setSortBy] = useState<"client_name" | "clinic_name" | "total_orders" | "loyalty_tier" | "discount_percent" | "created_at">("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (nextSortBy: typeof sortBy) => {
+    setPage(1);
+    if (nextSortBy === sortBy) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(nextSortBy);
+      setSortDir("asc");
+    }
+  };
+
   const { data, isLoading } = useQuery({
-    queryKey: ["manager-clients", page, search],
-    queryFn: () => getClients({ page, limit, search }),
+    queryKey: ["manager-clients", page, search, sortBy, sortDir],
+    queryFn: () => getClients({ page, limit, search, sort_by: sortBy, sort_dir: sortDir }),
   });
 
   const updateMutation = useMutation({
@@ -44,18 +60,37 @@ export const ManagerClients = () => {
 
   const clients = data?.items || [];
 
+  const filterConfigs: FilterConfig[] = [
+    {
+      key: "status",
+      label: "Статус заказов",
+      type: "select",
+      options: [
+        { value: "new", label: "Новый" },
+        { value: "confirmed", label: "Подтверждён" },
+        { value: "in_progress", label: "В работе" },
+        { value: "completed", label: "Завершён" },
+      ],
+    },
+    { key: "date_from", label: "Период от", type: "date" },
+    { key: "date_to", label: "Период до", type: "date" },
+  ];
+
+  const exportFilters = toExportFilters({ filters, search });
+
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Клиенты</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Клиенты</h1>
+        <ExportButton resource="orders-by-client" filters={exportFilters} title="Сводка заказов по клиентам" />
+      </div>
 
-      <Card>
-        <CardHeader>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Поиск по имени, email, клинике..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-        </CardHeader>
-      </Card>
+      <SearchAndFilter
+        onSearch={setSearch}
+        onFilter={setFilters}
+        filters={filterConfigs}
+        searchPlaceholder="Поиск по имени, email, клинике..."
+      />
 
       {isLoading ? (
         <div className="space-y-4">{[...Array(5)].map((_, i) => <Card key={i} className="animate-pulse"><CardContent className="py-6"><div className="h-6 w-3/4 bg-muted rounded" /></CardContent></Card>)}</div>
@@ -68,12 +103,24 @@ export const ManagerClients = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Клиент</TableHead>
-                    <TableHead>Клиника</TableHead>
-                    <TableHead>Заказов</TableHead>
-                    <TableHead>Лояльность</TableHead>
-                    <TableHead>Скидка</TableHead>
-                    <TableHead>Дата регистрации</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("client_name")}>
+                      Клиент{sortBy === "client_name" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("clinic_name")}>
+                      Клиника{sortBy === "clinic_name" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("total_orders")}>
+                      Заказов{sortBy === "total_orders" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("loyalty_tier")}>
+                      Лояльность{sortBy === "loyalty_tier" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("discount_percent")}>
+                      Скидка{sortBy === "discount_percent" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("created_at")}>
+                      Дата регистрации{sortBy === "created_at" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                    </TableHead>
                     <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -82,15 +129,15 @@ export const ManagerClients = () => {
                     <TableRow key={client.id}>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{client.user?.first_name} {client.user?.last_name}</p>
-                          <p className="text-sm text-muted-foreground">{client.user?.email}</p>
+                          <p className="font-medium">{client.first_name} {client.last_name}</p>
+                          <p className="text-sm text-muted-foreground">{client.email}</p>
                         </div>
                       </TableCell>
                       <TableCell>{client.clinic_name || "—"}</TableCell>
                       <TableCell>{client.total_orders}</TableCell>
                       <TableCell><Badge className={TIER_COLORS[client.loyalty_tier] || "bg-muted"}>{client.loyalty_tier}</Badge></TableCell>
                       <TableCell>{client.discount_percent}%</TableCell>
-                      <TableCell>{new Date(client.user?.created_at).toLocaleDateString("ru-RU")}</TableCell>
+                      <TableCell>{client.created_at ? new Date(client.created_at).toLocaleDateString("ru-RU") : "—"}</TableCell>
                       <TableCell>
                         <Button variant="outline" size="sm" onClick={() => setEditModal({ clientId: client.id, open: true, discount: client.discount_percent, tier: client.loyalty_tier })}>Изменить</Button>
                       </TableCell>

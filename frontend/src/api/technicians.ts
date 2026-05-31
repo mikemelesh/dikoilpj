@@ -59,7 +59,16 @@ export const updateTechnicianProfile = async (data: UpdateTechnicianProfileData)
 /**
  * Получение заказов техника
  */
-export const getTechnicianOrders = async (params?: { status?: string | string[]; page?: number; limit?: number }) => {
+export const getTechnicianOrders = async (params?: {
+  status?: string | string[];
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  sort_by?: string;
+  sort_dir?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+}) => {
   const queryParams = new URLSearchParams();
   if (params?.status) {
     if (Array.isArray(params.status)) {
@@ -68,6 +77,11 @@ export const getTechnicianOrders = async (params?: { status?: string | string[];
       queryParams.append("status", params.status);
     }
   }
+  if (params?.date_from) queryParams.append("date_from", params.date_from);
+  if (params?.date_to) queryParams.append("date_to", params.date_to);
+  if (params?.search) queryParams.append("search", params.search);
+  if (params?.sort_by) queryParams.append("sort_by", params.sort_by);
+  if (params?.sort_dir) queryParams.append("sort_dir", params.sort_dir);
   if (params?.page) queryParams.append("page", String(params.page));
   if (params?.limit) queryParams.append("limit", String(params.limit));
 

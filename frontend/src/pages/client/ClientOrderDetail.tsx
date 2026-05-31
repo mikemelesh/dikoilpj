@@ -7,6 +7,7 @@ import { z } from "zod";
 import { toast } from "react-toastify";
 
 import { getOrder, uploadFile, deleteFile } from "@/api/orders";
+import { clientOrdersQueryOptions } from "@/lib/clientOrdersQuery";
 import { createOrderReview } from "@/api/reviews";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,7 @@ export const ClientOrderDetail = () => {
     queryKey: ["order", id],
     queryFn: () => getOrder(id!),
     enabled: !!id,
+    ...clientOrdersQueryOptions,
   });
 
   const uploadMutation = useMutation({

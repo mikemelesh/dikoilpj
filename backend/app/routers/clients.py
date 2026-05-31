@@ -31,6 +31,8 @@ async def get_clients(
     loyalty_tier: Optional[str] = Query(None, description="Фильтр по уровню лояльности"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    sort_by: Optional[str] = Query("created_at", description="Поле сортировки"),
+    sort_dir: Optional[str] = Query("desc", description="asc|desc"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(["manager", "admin"])),
 ):
@@ -65,11 +67,44 @@ async def get_clients(
             )
         query = query.filter(Client.loyalty_tier == loyalty_tier.lower())
 
+    # Сортировка (safe whitelist)
+    sort_by = (sort_by or "created_at").lower()
+    sort_dir = (sort_dir or "desc").lower()
+    if sort_dir not in {"asc", "desc"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="sort_dir должен быть asc или desc")
+
+    from sqlalchemy import literal
+
+    # Expressions for "client name" (User.first_name + ' ' + User.last_name)
+    client_name_expr = (
+        func.coalesce(User.first_name, "")
+        .op("||")(literal(" "))
+        .op("||")(func.coalesce(User.last_name, ""))
+    )
+
+    sort_map = {
+        "client_name": client_name_expr,
+        "clinic_name": Client.clinic_name,
+        "total_orders": Client.total_orders,
+        "loyalty_tier": Client.loyalty_tier,
+        "discount_percent": Client.discount_percent,
+        "created_at": User.created_at,
+    }
+
+    sort_col = sort_map.get(sort_by)
+    if sort_col is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Недопустимое значение sort_by")
+
+    if sort_dir == "asc":
+        order = sort_col.asc().nulls_last() if hasattr(sort_col, "nulls_last") else sort_col.asc()
+    else:
+        order = sort_col.desc().nulls_last() if hasattr(sort_col, "nulls_last") else sort_col.desc()
+
     # Пагинация
     total = query.count()
     pages = math.ceil(total / limit) if total > 0 else 0
     offset = (page - 1) * limit
-    clients = query.order_by(Client.total_orders.desc()).offset(offset).limit(limit).all()
+    clients = query.order_by(order).offset(offset).limit(limit).all()
 
     # Формируем ответ
     items = []
@@ -89,6 +124,7 @@ async def get_clients(
             loyalty_tier=client.loyalty_tier,
             discount_percent=client.discount_percent,
             loyalty_points=client.user.loyalty_points,
+            created_at=client.user.created_at,
         ))
 
     return ClientListResponse(

@@ -5,22 +5,26 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, Package, TrendingUp, MessageSquare, Star } from "lucide-react";
+import { Users, Package, TrendingUp, MessageSquare, Star, Download } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { ExportButton } from "@/components/shared/ExportButton";
 
 interface OrderAnalytics { total: number; by_status: Record<string, number>; by_priority: Record<string, number>; avg_completion_days?: number }
 interface RevenueAnalytics { total: number; by_period: { date: string; amount: number }[]; by_service_category: { category_id: number; category_name: string; total: number }[] }
+interface UserAnalytics { total: number; by_role: Record<string, number>; active: number }
 interface ActionLog { id: number; user_id?: string; user_email?: string; action_type: string; entity_type: string; entity_id?: string; description?: string; ip_address?: string; created_at: string }
 interface Review { id: number; client_name?: string; order_id?: number; order_number?: string; rating: number; text?: string; is_moderated: boolean; is_published: boolean; created_at: string }
 
 export const AdminDashboard = () => {
   const { data: orderAnalytics } = useQuery<OrderAnalytics>({ queryKey: ["admin-order-analytics"], queryFn: () => apiClient.get("/analytics/orders").then(r => r.data) });
   const { data: revenueAnalytics } = useQuery<RevenueAnalytics>({ queryKey: ["admin-revenue-analytics"], queryFn: () => apiClient.get("/analytics/revenue").then(r => r.data) });
+  const { data: userAnalytics } = useQuery<UserAnalytics>({ queryKey: ["admin-user-analytics"], queryFn: () => apiClient.get("/analytics/users").then(r => r.data) });
   const { data: logs } = useQuery<{ items: ActionLog[]; total: number }>({ queryKey: ["admin-logs-dashboard"], queryFn: () => apiClient.get("/admin/logs?limit=10").then(r => r.data) });
   const { data: pendingReviews } = useQuery<{ items: Review[]; total: number }>({ queryKey: ["admin-pending-reviews"], queryFn: () => apiClient.get("/reviews/pending").then(r => r.data) });
 
   const totalOrders = orderAnalytics?.total || 0;
   const totalRevenue = revenueAnalytics?.total || 0;
+  const totalUsers = userAnalytics?.total || 0;
   const logsCount = logs?.total || 0;
   const pendingReviewsCount = pendingReviews?.total || 0;
 
@@ -32,7 +36,10 @@ export const AdminDashboard = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Панель администратора</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Панель администратора</h1>
+        <ExportButton resource="orders" title="Отчёт по всем заказам" />
+      </div>
 
       {/* KPI карточки */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -42,7 +49,7 @@ export const AdminDashboard = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalOrders > 0 ? totalOrders : "—"}</div>
+            <div className="text-2xl font-bold">{totalUsers > 0 ? totalUsers : "—"}</div>
             <p className="text-xs text-muted-foreground">Всего в системе</p>
           </CardContent>
         </Card>

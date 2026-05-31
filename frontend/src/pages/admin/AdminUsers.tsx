@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, X } from "lucide-react";
+import { Search, X, Download } from "lucide-react";
+import { ExportButton } from "@/components/shared/ExportButton";
 
 interface User { id: string; email: string; first_name?: string; last_name?: string; role: string; is_active: boolean; created_at: string }
 
@@ -56,7 +57,10 @@ export const AdminUsers = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Пользователи</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Пользователи</h1>
+        <ExportButton resource="users" title="Отчёт по пользователям" />
+      </div>
 
       {/* Фильтры */}
       <Card>

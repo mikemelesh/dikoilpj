@@ -2,11 +2,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, field_validator
-from sqlalchemy.orm import Session
+from pydantic import BaseModel, EmailStr, Field, field_validator
+from sqlalchemy.orm import Session, joinedload
 
 from ..config import settings
-from ..database import SessionLocal
+from ..database import SessionLocal, get_db
 from ..dependencies.auth import (
     blacklist_token,
     create_access_token,
@@ -14,7 +14,8 @@ from ..dependencies.auth import (
     get_current_active_user,
     verify_token,
 )
-from ..models import Client, User, UserRole
+from ..models.client import Client, ClientType
+from ..models import User, UserRole
 from ..utils.security import get_password_hash, log_action, verify_password
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -26,7 +27,7 @@ class RegisterRequest(BaseModel):
     first_name: str
     last_name: str
     phone: Optional[str] = None
-    role: Optional[str] = "client"
+    client_type: str = Field(..., pattern="^(physical|legal)$")  # physical/legal
 
     @field_validator("password")
     @classmethod
@@ -35,12 +36,11 @@ class RegisterRequest(BaseModel):
             raise ValueError("Пароль должен быть не менее 8 символов и содержать букву и цифру")
         return v
 
-    @field_validator("role")
+    @field_validator("client_type")
     @classmethod
-    def validate_role(cls, v: str) -> str:
-        allowed_roles = ["client", "manager", "technician"]
-        if v not in allowed_roles:
-            raise ValueError(f"Роль должна быть одной из: {', '.join(allowed_roles)}")
+    def validate_client_type(cls, v: str) -> str:
+        if v not in ["physical", "legal"]:
+            raise ValueError("client_type должен быть 'physical' или 'legal'")
         return v
 
 
@@ -59,6 +59,12 @@ class UserInfo(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class UpdateProfileRequest(BaseModel):
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    phone: Optional[str] = Field(None, max_length=20)
 
 
 class TokenResponse(BaseModel):
@@ -98,12 +104,10 @@ async def register(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email уже зарегистрирован")
 
         hashed_password = get_password_hash(payload.password)
-        user_role = UserRole(payload.role) if payload.role else UserRole.CLIENT
-        
         user = User(
             email=payload.email,
             hashed_password=hashed_password,
-            role=user_role,
+            role=UserRole.CLIENT,
             first_name=payload.first_name,
             last_name=payload.last_name,
             phone=payload.phone,
@@ -111,15 +115,14 @@ async def register(
         db.add(user)
         db.flush()
 
-        # Создаем профиль в зависимости от роли
-        if user_role == UserRole.CLIENT:
-            client = Client(user_id=user.id)
-            db.add(client)
-        elif user_role == UserRole.TECHNICIAN:
-            from ..models.technician import Technician
-            technician = Technician(user_id=user.id)
-            db.add(technician)
-        # Для manager профиль не требуется
+        # Всегда создаем клиентский профиль с типом
+        client = Client(
+            user_id=user.id,
+            client_type=payload.client_type
+        )
+        db.add(client)
+        db.commit()
+        db.refresh(user)
         
         db.commit()
         db.refresh(user)
@@ -359,3 +362,48 @@ async def get_me(
     finally:
         db.close()
 
+
+@router.put("/profile", response_model=UserInfo)
+async def update_profile(
+    profile_data: UpdateProfileRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Обновить профиль пользователя.
+    Доступно: любому аутентифицированному пользователю (свой профиль).
+    """
+    # Получаем пользователя из базы данных с использованием переданной сессии
+    db_user = db.query(User).filter(User.id == current_user.id).first()
+    if not db_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    
+    # Обновляем только разрешенные поля если они предоставлены
+    if profile_data.first_name is not None:
+        db_user.first_name = profile_data.first_name
+    if profile_data.last_name is not None:
+        db_user.last_name = profile_data.last_name
+    if profile_data.phone is not None:
+        db_user.phone = profile_data.phone
+    
+    db.commit()
+    db.refresh(db_user)
+    
+    log_action(
+        db,
+        user_id=str(current_user.id),
+        action_type="update_profile",
+        entity_type="user",
+        entity_id=str(current_user.id),
+        description="Обновление профиля пользователя",
+        # We can't access the request object here directly, so we skip logging IP/email
+    )
+    
+    return UserInfo(
+        id=str(current_user.id),
+        email=current_user.email,
+        first_name=current_user.first_name,
+        last_name=current_user.last_name,
+        phone=current_user.phone,
+        role=current_user.role.value,
+    )

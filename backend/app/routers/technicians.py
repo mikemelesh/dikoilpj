@@ -1,12 +1,12 @@
 """
 Роутеры для управления техниками.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
@@ -42,8 +42,9 @@ async def get_technicians(
     Публичный endpoint (для HomePage).
     """
     from ..models.user import User
+    from sqlalchemy.orm import joinedload
     
-    query = db.query(Technician).join(User)
+    query = db.query(Technician).options(joinedload(Technician.user))
 
     if available_only:
         query = query.filter(Technician.is_available == True)
@@ -197,6 +198,11 @@ async def get_current_technician_stats(
 @router.get("/me/orders")
 async def get_current_technician_orders(
     status_filter: Optional[list[str]] = Query(None, alias="status"),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    search: Optional[str] = Query(None, min_length=1),
+    sort_by: Optional[str] = Query(None, description="Поле сортировки"),
+    sort_dir: Optional[str] = Query("asc", description="asc|desc"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -226,13 +232,77 @@ async def get_current_technician_orders(
         joinedload(Order.technician),
     ).filter(Order.technician_id == technician.id)
 
-    # Поддержка множественных статусов
     if status_filter:
         query = query.filter(Order.status.in_(status_filter))
 
+    if date_from:
+        query = query.filter(Order.created_at >= datetime.combine(date_from, time.min))
+    if date_to:
+        query = query.filter(Order.created_at <= datetime.combine(date_to, time.max))
+
+    if search and search.strip():
+        from ..models.user import User
+        pattern = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                Order.order_number.ilike(pattern),
+                Order.client.has(
+                    or_(
+                        Client.clinic_name.ilike(pattern),
+                        Client.user.has(
+                            or_(
+                                User.first_name.ilike(pattern),
+                                User.last_name.ilike(pattern),
+                            )
+                        ),
+                    )
+                ),
+            )
+        )
+
+    # Сортировка
+    if sort_by:
+        allowed_sort_by = {
+            "order_number": Order.order_number,
+            "created_at": Order.created_at,
+            "deadline": Order.deadline,
+            "status": Order.status,
+            "priority": Order.priority,
+            "final_price": Order.final_price,
+        }
+
+        # Имена требуют JOIN
+        if sort_by == "client_name":
+            query = query.join(Order.client).join(Client.user)
+            allowed_sort_by["client_name"] = func.concat(
+                func.coalesce(User.first_name, ""),
+                func.concat(" ", func.coalesce(User.last_name, "")),
+            )
+        if sort_by == "technician_name":
+            query = query.join(Order.technician).join(Technician.user)
+            allowed_sort_by["technician_name"] = func.concat(
+                func.coalesce(User.first_name, ""),
+                func.concat(" ", func.coalesce(User.last_name, "")),
+            )
+
+        allowed_dir = {"asc", "desc"}
+        if sort_dir not in allowed_dir:
+            raise HTTPException(status_code=400, detail="sort_dir должен быть asc или desc")
+
+        sort_col = allowed_sort_by.get(sort_by)
+        if not sort_col:
+            raise HTTPException(status_code=400, detail="Недопустимое sort_by")
+
+        if sort_dir == "desc":
+            query = query.order_by(sort_col.desc().nullslast() if hasattr(sort_col, "nullslast") else sort_col.desc())
+        else:
+            query = query.order_by(sort_col.asc().nullslast() if hasattr(sort_col, "nullslast") else sort_col.asc())
+    else:
+        query = query.order_by(Order.created_at.desc())
+
     total = query.count()
     offset = (page - 1) * limit
-    orders = query.order_by(Order.created_at.desc()).offset(offset).limit(limit).all()
+    orders = query.offset(offset).limit(limit).all()
 
     # Загружаем услуги отдельно
     service_ids = set()
@@ -335,11 +405,10 @@ async def update_technician_profile(
 async def get_technician(
     technician_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["manager", "admin"])),
 ):
     """
     Получить детальную информацию о технике.
-    Доступно: manager, admin.
+    Публичный эндпоинт.
     """
     technician = db.query(Technician).options(
         joinedload(Technician.user)
@@ -366,6 +435,86 @@ async def get_technician(
         portfolio_description=technician.portfolio_description,
         is_available=technician.is_available,
         created_at=technician.user.created_at,
+        updated_at=technician.user.updated_at,
+    )
+
+
+@router.put("/{technician_id}", response_model=TechnicianDetailResponse)
+async def update_technician(
+    technician_id: int,
+    profile_data: TechnicianUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["manager", "admin"])),
+):
+    """
+    Обновить информацию о технике.
+    Доступно: manager, admin.
+    """
+    technician = db.query(Technician).filter(Technician.id == technician_id).first()
+
+    if not technician:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Техник не найден"
+        )
+
+    # Проверка на существование пользователя с таким email (если он меняется)
+    if profile_data.email and profile_data.email != technician.user.email:
+        existing_user = db.query(User).filter(
+            User.email == profile_data.email,
+            User.id != technician.user_id
+        ).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email уже используется другим пользователем"
+            )
+
+    update_data = profile_data.model_dump(exclude_unset=True)
+
+    # Обновляем данные пользователя
+    if "email" in update_data:
+        technician.user.email = update_data.pop("email")
+    if "first_name" in update_data:
+        technician.user.first_name = update_data.pop("first_name")
+    if "last_name" in update_data:
+        technician.user.last_name = update_data.pop("last_name")
+    if "phone" in update_data:
+        technician.user.phone = update_data.pop("phone")
+
+    # Обновляем данные техника
+    for field, value in update_data.items():
+        setattr(technician, field, value)
+
+    db.add(technician)
+    db.commit()
+    db.refresh(technician)
+
+    log_action(
+        db=db,
+        user_id=str(current_user.id),
+        action_type="update_technician",
+        entity_type="technician",
+        entity_id=str(technician.id),
+        description=f"Обновлен техник {technician.user.first_name} {technician.user.last_name}",
+    )
+
+    return TechnicianDetailResponse(
+        id=technician.id,
+        user_id=str(technician.user.id),
+        email=technician.user.email,
+        first_name=technician.user.first_name,
+        last_name=technician.user.last_name,
+        phone=technician.user.phone,
+        avatar_url=technician.user.avatar_url,
+        specialization=technician.specialization,
+        experience_years=technician.experience_years,
+        rating=technician.rating,
+        completed_orders=technician.completed_orders,
+        portfolio_description=technician.portfolio_description,
+        is_available=technician.is_available,
+        created_at=technician.user.created_at,
+        updated_at=technician.user.updated_at,
     )
 
 

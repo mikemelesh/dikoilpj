@@ -1,5 +1,10 @@
+import axios from "axios";
 import { apiClient } from "./axios";
-import type { User, AuthTokens, LoginCredentials, RegisterData } from "@/types";
+import { authStore } from "@/stores/authStore";
+import type { AuthTokens, LoginCredentials, RegisterData } from "@/types";
+
+// Use the same base URL as apiClient but without relying on the interceptors
+const BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api";
 
 // =============================================================================
 // Типы профилей
@@ -59,7 +64,8 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
   body.append("username", credentials.email);
   body.append("password", credentials.password);
 
-  const response = await apiClient.post<AuthResponse>("/auth/login", body, {
+  // Use raw axios with the same base URL as apiClient but without interceptors
+  const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/login`, body, {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
   });
 
@@ -70,7 +76,10 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
  * Регистрация нового пользователя
  */
 export const register = async (data: RegisterData): Promise<AuthResponse> => {
-  const response = await apiClient.post<AuthResponse>("/auth/register", data);
+  // Use raw axios with the same base URL as apiClient but without interceptors
+  const response = await axios.post<AuthResponse>(`${BASE_URL}/auth/register`, data, {
+    headers: { "Content-Type": "application/json" },
+  });
   return response.data;
 };
 
@@ -78,7 +87,7 @@ export const register = async (data: RegisterData): Promise<AuthResponse> => {
  * Обновление токена
  */
 export const refreshToken = async (refreshToken: string): Promise<{ access_token: string; refresh_token: string }> => {
-  const response = await apiClient.post<{ access_token: string; refresh_token: string }>("/auth/refresh", {
+  const response = await axios.post<{ access_token: string; refresh_token: string }>(`${BASE_URL}/auth/refresh`, {
     refresh_token: refreshToken,
   });
   return response.data;
@@ -88,7 +97,15 @@ export const refreshToken = async (refreshToken: string): Promise<{ access_token
  * Выход из системы
  */
 export const logout = async (): Promise<void> => {
-  await apiClient.post("/auth/logout");
+  // Get current tokens from the store to make the logout request
+  const state = authStore.getState();
+  if (state.accessToken) {
+    await axios.post(`${BASE_URL}/auth/logout`, {}, {
+      headers: { "Authorization": `Bearer ${state.accessToken}` }
+    });
+  }
+  // Clear the auth store regardless
+  authStore.getState().logout();
 };
 
 /**
@@ -96,6 +113,21 @@ export const logout = async (): Promise<void> => {
  */
 export const getMe = async (): Promise<MeResponse> => {
   const response = await apiClient.get<MeResponse>("/auth/me");
+  return response.data;
+};
+
+/**
+ * Получение пользователя по ID (для админа)
+ */
+export const getUsers = async (params?: GetUsersParams): Promise<GetUsersResponse> => {
+  const queryParams = new URLSearchParams();
+  
+  if (params?.role) queryParams.append("role", params.role);
+  if (params?.is_active !== undefined) queryParams.append("is_active", String(params.is_active));
+  if (params?.page) queryParams.append("page", String(params.page));
+  if (params?.limit) queryParams.append("limit", String(params.limit));
+
+  const response = await apiClient.get<GetUsersResponse>(`/users?${queryParams.toString()}`);
   return response.data;
 };
 

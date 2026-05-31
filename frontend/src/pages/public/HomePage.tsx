@@ -199,78 +199,51 @@ export const HomePage = () => {
           <div className="container mx-auto px-4">
             <h2 className="mb-8 text-center text-3xl font-bold">Наши услуги</h2>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {isLoading ? (
-                Array(6).fill(0).map((_, i) => (
-                  <Card key={i} className="animate-pulse">
-                    <CardHeader>
-                      <div className="h-6 w-3/4 bg-muted rounded" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="h-4 w-full bg-muted rounded" />
-                    </CardContent>
-                  </Card>
-                ))
-              ) : (
-                categories.map((category) => (
-                  <Card key={category.id} className="transition-shadow hover:shadow-lg">
-                    <CardHeader>
-                      <CardTitle>{category.name}</CardTitle>
-                      {category.description && (
-                        <CardDescription>{category.description}</CardDescription>
+              {categories.slice(0, 6).map((category) => (
+                <Card key={category.id} className="group">
+                  <CardHeader>
+                    <div className="flex items-start gap-4">
+                      {category.icon_url ? (
+                        <img
+                          src={category.icon_url}
+                          alt={category.name}
+                          className="h-10 w-10 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <TrendingUp className="h-5 w-5 text-primary" />
+                        </div>
                       )}
-                    </CardHeader>
-                  </Card>
-                ))
-              )}
+                      <div>
+                        <CardTitle className="text-lg">{category.name}</CardTitle>
+                        <CardDescription className="mt-1">
+                          {category.description}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => navigate("/services")}
+                    >
+                      Подробнее
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          </div>
-        </section>
-
-        {/* Преимущества */}
-        <section className="container mx-auto px-4 py-16">
-          <h2 className="mb-8 text-center text-3xl font-bold">Почему выбирают нас</h2>
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <Award className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="font-semibold">Высокое качество</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Используем только сертифицированные материалы
-              </p>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <Clock className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="font-semibold">Соблюдение сроков</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                95% заказов выполняем точно в срок
-              </p>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <TrendingUp className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="font-semibold">Современные технологии</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                CAD/CAM, 3D-печать, цифровое моделирование
-              </p>
-            </div>
-            <div className="flex flex-col items-center text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                <Star className="h-8 w-8 text-primary" />
-              </div>
-              <h3 className="font-semibold">Опытные техники</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Средний стаж наших техников — 8 лет
-              </p>
+            <div className="mt-8 text-center">
+              <Link to="/services">
+                <Button variant="outline">Все услуги</Button>
+              </Link>
             </div>
           </div>
         </section>
 
         {/* Техники */}
-        <section className="bg-muted/50 py-16">
+        <section className="py-16">
           <div className="container mx-auto px-4">
             <h2 className="mb-8 text-center text-3xl font-bold">Наши специалисты</h2>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -323,31 +296,79 @@ export const HomePage = () => {
           </div>
         </section>
 
+        {/* Requirements and Manufacturing Times Section */}
+        <section className="bg-muted/50 py-16">
+          <div className="container mx-auto px-4">
+            <h2 className="mb-8 text-center text-3xl font-bold">Требования к работе</h2>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <Card className="border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5" />
+                    Требования к снимкам
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Узнайте, какие требования мы предъявляем к снимкам для изготовления точных ортопедических конструкций.
+                  </p>
+                  <Link to="/requirements">
+                    <Button variant="outline" className="mt-4 w-full">
+                      Подробнее
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Сроки изготовления
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Ознакомьтесь с установленными сроками изготовления различных типов ортопедических конструкций.
+                  </p>
+                  <Link to="/requirements">
+                    <Button variant="outline" className="mt-4 w-full">
+                      Подробнее
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </section>
+
         {/* Акции */}
         {promotions.length > 0 && (
-          <section className="container mx-auto px-4 py-16">
-            <h2 className="mb-8 text-center text-3xl font-bold">Акции</h2>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {promotions.map((promo) => (
-                <Card key={promo.id} className="border-primary/20">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>{promo.title}</CardTitle>
-                      <Badge variant="default" className="bg-green-500">
-                        -{promo.discount_percent}%
-                      </Badge>
-                    </div>
-                    {promo.description && (
-                      <CardDescription>{promo.description}</CardDescription>
-                    )}
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      Действует до {new Date(promo.end_date).toLocaleDateString('ru-RU')}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
+          <section className="bg-muted/50 py-16">
+            <div className="container mx-auto px-4">
+              <h2 className="mb-8 text-center text-3xl font-bold">Акции</h2>
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {promotions.map((promo) => (
+                  <Card key={promo.id} className="border-primary/20">
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle>{promo.title}</CardTitle>
+                        <Badge variant="default" className="bg-green-500">
+                          -{promo.discount_percent}%
+                        </Badge>
+                      </div>
+                      {promo.description && (
+                        <CardDescription>{promo.description}</CardDescription>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        Действует до {new Date(promo.end_date).toLocaleDateString('ru-RU')}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           </section>
         )}

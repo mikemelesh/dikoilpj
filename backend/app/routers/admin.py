@@ -98,14 +98,22 @@ async def get_all_users(
     search: Optional[str] = Query(None, min_length=1, description="Поиск по имени и email"),
     role: Optional[str] = Query(None, description="Фильтр по роли"),
     is_active: Optional[bool] = Query(None, description="Фильтр по активности"),
+    sort_by: Optional[str] = Query(
+        "created_at",
+        description="Поле сортировки: name|email|role|is_active|created_at",
+    ),
+    sort_dir: Optional[str] = Query(
+        "desc",
+        description="Направление сортировки: asc|desc",
+    ),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["admin"])),
+    current_user: User = Depends(require_roles(["admin", "manager"])),
 ):
     """
     Получить список всех пользователей.
-    Доступно: admin.
+    Доступно: admin, manager.
     """
     from sqlalchemy import or_
     
@@ -135,10 +143,52 @@ async def get_all_users(
     if is_active is not None:
         query = query.filter(User.is_active == is_active)
 
+    # Сортировка (safe whitelist)
+    sort_by = (sort_by or "created_at").lower()
+    sort_dir = (sort_dir or "desc").lower()
+    if sort_dir not in {"asc", "desc"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="sort_dir должен быть asc или desc",
+        )
+
+    # name: first_name + ' ' + last_name (safe for NULLs)
+    # Use Postgres concatenation operator (||) instead of func.concat for better compatibility.
+    # NOTE: use sqlalchemy.literal(), not func.literal().
+    from sqlalchemy import literal
+
+    name_expr = (
+        func.coalesce(User.first_name, "")
+        .op("||")(literal(" "))
+        .op("||")(func.coalesce(User.last_name, ""))
+    )
+
+    sort_map = {
+        "name": name_expr,
+        "email": User.email,
+        "role": User.role,
+        "is_active": User.is_active,
+        "created_at": User.created_at,
+    }
+
+    sort_col = sort_map.get(sort_by)
+    if sort_col is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Недопустимое значение sort_by",
+        )
+
+    # nulls to the end
+    # (SQLAlchemy supports NULLS LAST for Postgres; if expression doesn't support it, it will still fall back safely)
+    if sort_dir == "asc":
+        order = sort_col.asc().nulls_last()
+    else:
+        order = sort_col.desc().nulls_last()
+
     total = query.count()
     pages = math.ceil(total / limit) if total > 0 else 0
     offset = (page - 1) * limit
-    users = query.order_by(User.created_at.desc()).offset(offset).limit(limit).all()
+    users = query.order_by(order).offset(offset).limit(limit).all()
 
     items = [
         UserSummaryResponse(
@@ -161,11 +211,11 @@ async def update_user_role(
     user_id: str,
     role_data: UserRoleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["admin"])),
+    current_user: User = Depends(require_roles(["admin", "manager"])),
 ):
     """
     Изменить роль пользователя.
-    Доступно: admin.
+    Доступно: admin, manager (менеджер не может назначать admin).
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -173,6 +223,19 @@ async def update_user_role(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пользователь не найден"
         )
+
+    new_role = role_data.role.lower()
+    if current_user.role == UserRole.MANAGER:
+        if new_role == "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Менеджер не может назначать роль администратора",
+            )
+        if user.role == UserRole.ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нельзя изменять учётную запись администратора",
+            )
     
     # Нельзя изменить роль админа (защита)
     if user.role == UserRole.ADMIN and current_user.id != user_id:
@@ -183,7 +246,6 @@ async def update_user_role(
     
     # Валидация роли
     valid_roles = ["guest", "client", "technician", "manager", "admin"]
-    new_role = role_data.role.lower()
     if new_role not in valid_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -222,17 +284,23 @@ async def update_user_status(
     user_id: str,
     status_data: UserStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(["admin"])),
+    current_user: User = Depends(require_roles(["admin", "manager"])),
 ):
     """
     Активировать/деактивировать пользователя.
-    Доступно: admin.
+    Доступно: admin, manager (не для учёток admin).
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Пользователь не найден"
+        )
+
+    if current_user.role == UserRole.MANAGER and user.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нельзя изменять учётную запись администратора",
         )
     
     # Нельзя деактивировать себя

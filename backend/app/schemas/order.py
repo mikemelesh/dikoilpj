@@ -1,6 +1,4 @@
-"""
-Pydantic схемы для заказов.
-"""
+# Pydantic schemas for orders and templates.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -9,34 +7,48 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-# === Статусы и приоритеты ===
+# Status and priority enums
+OrderStatusEnum = str
+OrderPriorityEnum = str
 
 
-OrderStatusEnum = str  # "new", "confirmed", "in_progress", "review", "completed", "cancelled", "archived"
-OrderPriorityEnum = str  # "normal", "urgent", "critical"
+# Order Templates
+class OrderTemplateCreate(BaseModel):
+    name: str = Field(..., max_length=255)
+    items: List[Dict[str, Any]] = Field(..., min_length=1)
+    notes: Optional[str] = Field(None, max_length=2000)
 
 
-# === Позиции заказа ===
+class OrderTemplateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    items: list
+    notes: Optional[str] = None
+    created_at: datetime
 
 
+class OrderTemplateListResponse(BaseModel):
+    items: List[OrderTemplateResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+
+# Order Items
 class OrderItemBase(BaseModel):
-    """Базовая схема позиции заказа."""
-    service_id: int = Field(..., gt=0, description="ID услуги")
-    quantity: int = Field(default=1, ge=1, description="Количество")
-    specifications: Optional[Dict[str, Any]] = Field(
-        None, description="Спецификации (цвет, размер и т.д.)"
-    )
+    service_id: int = Field(..., gt=0)
+    quantity: int = Field(default=1, ge=1)
+    specifications: Optional[Dict[str, Any]] = Field(None)
 
 
 class OrderItemCreate(OrderItemBase):
-    """Схема для создания позиции заказа."""
     pass
 
 
 class OrderItemResponse(BaseModel):
-    """Схема ответа позиции заказа."""
     model_config = ConfigDict(from_attributes=True)
-
     id: int
     order_id: str
     service_id: int
@@ -47,13 +59,9 @@ class OrderItemResponse(BaseModel):
     specifications: Optional[Dict[str, Any]] = None
 
 
-# === Файлы заказа ===
-
-
+# Files
 class OrderFileResponse(BaseModel):
-    """Схема ответа файла заказа."""
     model_config = ConfigDict(from_attributes=True)
-
     id: int
     order_id: str
     file_name: str
@@ -71,13 +79,9 @@ class OrderFileResponse(BaseModel):
         return str(v)
 
 
-# === История статусов ===
-
-
+# Status History
 class OrderStatusHistoryResponse(BaseModel):
-    """Схема ответа истории статусов."""
     model_config = ConfigDict(from_attributes=True)
-
     id: int
     order_id: str
     old_status: str
@@ -87,14 +91,11 @@ class OrderStatusHistoryResponse(BaseModel):
     changed_by: str
 
 
-# === Заказ ===
-
-
+# Orders
 class OrderBase(BaseModel):
-    """Базовая схема заказа."""
-    notes: Optional[str] = Field(None, max_length=2000, description="Заметки")
-    deadline: Optional[date] = Field(None, description="Дедлайн")
-    priority: str = Field(default="normal", description="Приоритет")
+    notes: Optional[str] = Field(None, max_length=2000)
+    deadline: Optional[date] = Field(None)
+    priority: str = Field(default="normal")
 
     @field_validator('deadline', mode='before')
     @classmethod
@@ -103,19 +104,18 @@ class OrderBase(BaseModel):
             return None
         if isinstance(v, date):
             return v
-        # Parse string date (YYYY-MM-DD)
         if isinstance(v, str):
             return date.fromisoformat(v)
         return v
 
 
 class OrderCreate(OrderBase):
-    """Схема для создания заказа."""
-    items: List[OrderItemCreate] = Field(..., min_length=1, description="Позиции заказа")
+    items: List[OrderItemCreate] = Field(..., min_length=1)
+    template_id: Optional[int] = Field(None, description="ID template")
+    repeat_from_order_id: Optional[str] = Field(None, description="Repeat from archive ID")
 
 
 class OrderUpdate(BaseModel):
-    """Схема для обновления заказа."""
     notes: Optional[str] = Field(None, max_length=2000)
     deadline: Optional[date] = None
     priority: Optional[str] = None
@@ -133,20 +133,20 @@ class OrderUpdate(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
-    """Схема для изменения статуса заказа."""
-    new_status: str = Field(..., description="Новый статус")
-    comment: Optional[str] = Field(None, max_length=1000, description="Комментарий")
+    new_status: str = Field(...)
+    comment: Optional[str] = Field(None, max_length=1000)
 
 
 class OrderAssignRequest(BaseModel):
-    """Схема для назначения исполнителя."""
-    technician_id: int = Field(..., gt=0, description="ID техника")
+    technician_id: int = Field(..., gt=0)
+
+
+class OrderAssignManagerRequest(BaseModel):
+    manager_id: str = Field(..., min_length=1)
 
 
 class OrderResponse(BaseModel):
-    """Схема ответа заказа."""
     model_config = ConfigDict(from_attributes=True)
-
     id: str
     order_number: str
     client_id: int
@@ -164,16 +164,27 @@ class OrderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
-
     items: List[OrderItemResponse] = Field(default_factory=list)
     files: List[OrderFileResponse] = Field(default_factory=list)
     status_history: List[OrderStatusHistoryResponse] = Field(default_factory=list)
 
 
-class OrderSummaryResponse(BaseModel):
-    """Краткая схема заказа для списков."""
-    model_config = ConfigDict(from_attributes=True)
+class OrderItemPriceUpdate(BaseModel):
+    id: int
+    unit_price: float = Field(..., ge=0)
+    quantity: Optional[int] = Field(None, ge=1)
 
+
+class OrderManagerPricingUpdate(BaseModel):
+    """Корректировка цены менеджером до подтверждения заказа (status=new)."""
+    final_price: Optional[float] = Field(None, ge=0)
+    discount_amount: Optional[float] = Field(None, ge=0)
+    items: Optional[List[OrderItemPriceUpdate]] = None
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
+class OrderSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: str
     order_number: str
     status: str
@@ -181,14 +192,16 @@ class OrderSummaryResponse(BaseModel):
     final_price: float
     created_at: datetime
     deadline: Optional[date] = None
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
     technician_id: Optional[int] = None
     technician_name: Optional[str] = None
 
 
 class OrderListResponse(BaseModel):
-    """Схема списка заказов с пагинацией."""
     items: List[OrderSummaryResponse]
     total: int
     page: int
     limit: int
     pages: int
+

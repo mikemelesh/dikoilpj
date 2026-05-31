@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { Article } from "@/types";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
+import { PublicLayout } from "@/components/layout/PublicLayout";
 
 export const ArticleDetailPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -26,24 +27,26 @@ export const ArticleDetailPage = () => {
   if (!article) return <div className="p-8 text-center">Статья не найдена</div>;
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-8">
-      <Link to="/articles">
-        <Button variant="ghost" className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Назад к статьям
-        </Button>
-      </Link>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-3xl">{article.title}</CardTitle>
-          {article.category && (
-            <p className="text-sm text-muted-foreground">Категория: {article.category}</p>
-          )}
-        </CardHeader>
-        <CardContent className="prose prose-sm max-w-none dark:prose-invert">
-          <ReactMarkdown>{article.content}</ReactMarkdown>
-        </CardContent>
-      </Card>
-    </div>
+    <PublicLayout title={article.title}>
+      <div className="max-w-3xl mx-auto">
+        <Link to="/articles">
+          <Button variant="ghost" className="mb-4">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Назад к статьям
+          </Button>
+        </Link>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-3xl">{article.title}</CardTitle>
+            {article.category && (
+              <p className="text-sm text-muted-foreground">Категория: {article.category}</p>
+            )}
+          </CardHeader>
+          <CardContent className="prose prose-sm max-w-none dark:prose-invert">
+            <ReactMarkdown>{article.content}</ReactMarkdown>
+          </CardContent>
+        </Card>
+      </div>
+    </PublicLayout>
   );
 };

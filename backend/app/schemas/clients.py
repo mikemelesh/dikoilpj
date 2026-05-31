@@ -26,6 +26,7 @@ class ClientSummary(BaseModel):
     loyalty_tier: str
     discount_percent: float
     loyalty_points: int
+    created_at: datetime
 
 
 class ClientOrderSummary(BaseModel):

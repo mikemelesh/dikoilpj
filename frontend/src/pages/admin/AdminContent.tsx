@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, X } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Download } from "lucide-react";
+import { ExportButton } from "@/components/shared/ExportButton";
 
 const articleSchema = z.object({
   title: z.string().min(1, "Заголовок обязателен"),
@@ -78,9 +79,12 @@ export const AdminContent = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Контент</h1>
-        <Button onClick={openCreate}><Plus className="mr-2 h-4 w-4" /> Добавить статью</Button>
+        <div className="flex space-x-2">
+          <ExportButton resource="articles" title="Статьи" />
+          <Button onClick={() => { setEditingArticle(null); setModalOpen(true); }}><Plus className="mr-2 h-4 w-4" /> Добавить статью</Button>
+        </div>
       </div>
 
       <Card>

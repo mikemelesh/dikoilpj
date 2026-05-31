@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { useQueryClient } from "@tanstack/react-query";
+import { Eye, EyeOff, Mail, Lock, Building2 } from "lucide-react";
 
 import { login as loginApi } from "@/api/auth";
 import { authStore } from "@/stores/authStore";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, Mail, Lock } from "lucide-react";
+import { Header } from "@/components/layout/Header"; // Import the Header component
 
 // =============================================================================
 // Схема валидации
@@ -34,8 +34,8 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export const LoginPage = () => {
   const navigate = useNavigate();
   const login = authStore((state) => state.login);
-  const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -43,24 +43,14 @@ export const LoginPage = () => {
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+    defaultValues: { email: "", password: "" },
   });
 
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
 
     try {
-      // Очищаем localStorage и кэш react-query перед новым входом
-      localStorage.removeItem("auth-storage");
-      queryClient.clear();
-
-      const response = await loginApi(data);
-
-      // Логируем ответ для отладки
-      console.log("Login response:", response);
+      const response = await loginApi({ email: data.email, password: data.password });
 
       // Проверяем, что пользователь есть в ответе
       if (!response.user) {
@@ -74,19 +64,34 @@ export const LoginPage = () => {
         technician_profile: response.technician_profile,
       };
 
-      // Сохраняем токены и пользователя в store
+      // Автологин после логина
       login(
         { access_token: response.access_token, refresh_token: response.refresh_token },
         userWithProfile
       );
 
-      toast.success("Вход выполнен успешно");
+      toast.success("Успешный вход");
 
-      // Редирект на дашборд роли
+      // Редирект на дашборд согласно роли
       const dashboardPath = getDashboardPath(response.user.role);
       navigate(dashboardPath, { replace: true });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Ошибка входа";
+      // Enhanced error handling for phone number related errors
+      let message = "Неверный email или пароль";
+      if (error instanceof Error) {
+        message = error.message;
+      } else if (typeof error === 'object' && error !== null && 'response' in error) {
+        const responseError = error as { response?: { data?: { detail?: string } } };
+        if (responseError.response?.data?.detail) {
+          message = responseError.response.data.detail;
+          
+          // Specific handling for phone number related errors
+          if (message.toLowerCase().includes('phone') || message.toLowerCase().includes('номер')) {
+            message = `Ошибка связанная с номером телефона: ${message}`;
+          }
+        }
+      }
+      
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -94,70 +99,82 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <div className="flex justify-center mb-4">
-            <Building2 className="h-12 w-12 text-primary" />
-          </div>
-          <CardTitle className="text-2xl text-center">Вход в систему</CardTitle>
-          <CardDescription className="text-center">
-            Введите email и пароль для входа
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Email */}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@example.com"
-                  className="pl-10"
-                  {...register("email")}
-                />
-              </div>
-              {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
-              )}
+    <div className="min-h-screen bg-background">
+      {/* Add the header to the login page */}
+      <Header />
+      
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <div className="flex justify-center mb-4">
+              <Building2 className="h-12 w-12 text-primary" />
             </div>
-
-            {/* Password */}
-            <div className="space-y-2">
-              <Label htmlFor="password">Пароль</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="pl-10"
-                  {...register("password")}
-                />
+            <CardTitle className="text-2xl text-center">Вход в аккаунт</CardTitle>
+            <CardDescription className="text-center">
+              Введите свои данные для входа в личный кабинет
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Email */}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="name@example.com"
+                    className="pl-10"
+                    {...register("email")}
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-sm text-destructive">{errors.email.message}</p>
+                )}
               </div>
-              {errors.password && (
-                <p className="text-sm text-destructive">{errors.password.message}</p>
-              )}
-            </div>
 
-            {/* Submit button */}
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Вход..." : "Войти"}
-            </Button>
+              {/* Password */}
+              <div className="space-y-2">
+                <Label htmlFor="password">Пароль</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="pl-10 pr-10"
+                    {...register("password")}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-destructive">{errors.password.message}</p>
+                )}
+              </div>
 
-            {/* Register link */}
-            <p className="text-center text-sm text-muted-foreground">
-              Нет аккаунта?{" "}
-              <Link to="/register" className="text-primary hover:underline">
-                Зарегистрироваться
-              </Link>
-            </p>
-          </form>
-        </CardContent>
-      </Card>
+              {/* Submit button */}
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Вход..." : "Войти"}
+              </Button>
+
+              {/* Register link */}
+              <p className="text-center text-sm text-muted-foreground">
+                Нет аккаунта?{" "}
+                <Link to="/register" className="text-primary hover:underline">
+                  Регистрация
+                </Link>
+              </p>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

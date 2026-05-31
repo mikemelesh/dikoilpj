@@ -6,7 +6,7 @@ import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 
-import { createOrder } from "@/api/orders";
+import { createOrder, uploadFile } from "@/api/orders";
 import { apiClient } from "@/api/axios";
 import { authStore } from "@/stores/authStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -48,6 +48,7 @@ export const ClientNewOrder = () => {
   const [calculatedTotal, setCalculatedTotal] = useState<number>(0);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [finalPrice, setFinalPrice] = useState<number>(0);
+  const [files, setFiles] = useState<File[]>([]);
 
   const { reset, register, control, handleSubmit, watch, formState: { errors } } = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -142,8 +143,18 @@ export const ClientNewOrder = () => {
 
   const createMutation = useMutation({
     mutationFn: (data: OrderFormData) => createOrder(data),
-    onSuccess: (order) => {
-      toast.success("Заказ создан");
+    onSuccess: async (order) => {
+      // Upload files after order creation
+      if (files.length > 0) {
+        try {
+          await Promise.all(files.map((file) => uploadFile(order.id, file)));
+          toast.success(`Заказ создан и файлы загружены (${files.length})`);
+        } catch (error) {
+          toast.error("Заказ создан, но произошла ошибка при загрузке файлов");
+        }
+      } else {
+        toast.success("Заказ создан");
+      }
       navigate(`/client/orders/${order.id}`);
     },
     onError: () => toast.error("Ошибка создания заказа"),
@@ -293,7 +304,7 @@ export const ClientNewOrder = () => {
               </div>
               <div>
                 <Label>Файлы (необязательно)</Label>
-                <FileUpload onFilesChange={() => {}} maxFiles={5} />
+                <FileUpload onFilesChange={(newFiles) => setFiles(newFiles)} maxFiles={5} />
               </div>
               <div className="flex justify-between">
                 <Button type="button" variant="outline" onClick={() => setStep(1)}>

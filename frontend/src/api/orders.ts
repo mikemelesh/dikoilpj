@@ -11,6 +11,10 @@ export interface GetOrdersParams {
   date_from?: string;
   date_to?: string;
   client_id?: number;
+  technician_id?: number;
+  search?: string;
+  sort_by?: string;
+  sort_dir?: "asc" | "desc";
   page?: number;
   limit?: number;
 }
@@ -57,6 +61,10 @@ export const getOrders = async (params?: GetOrdersParams): Promise<OrdersRespons
   if (params?.date_from) queryParams.append("date_from", params.date_from);
   if (params?.date_to) queryParams.append("date_to", params.date_to);
   if (params?.client_id) queryParams.append("client_id", String(params.client_id));
+  if (params?.technician_id) queryParams.append("technician_id", String(params.technician_id));
+  if (params?.search) queryParams.append("search", params.search);
+  if (params?.sort_by) queryParams.append("sort_by", params.sort_by);
+  if (params?.sort_dir) queryParams.append("sort_dir", params.sort_dir);
   if (params?.page) queryParams.append("page", String(params.page));
   if (params?.limit) queryParams.append("limit", String(params.limit));
 
@@ -96,6 +104,21 @@ export const updateOrderStatus = async (id: string, data: UpdateOrderStatusData)
   return response.data;
 };
 
+export interface UpdateOrderPricingData {
+  final_price?: number;
+  discount_amount?: number;
+  items?: { id: number; unit_price: number; quantity?: number }[];
+  notes?: string;
+}
+
+export const updateOrderPricing = async (
+  id: string,
+  data: UpdateOrderPricingData
+): Promise<Order> => {
+  const response = await apiClient.patch<Order>(`/orders/${id}/pricing`, data);
+  return response.data;
+};
+
 /**
  * Назначение техника на заказ
  */
@@ -122,6 +145,22 @@ export const uploadFile = async (orderId: string, file: File): Promise<OrderFile
  */
 export const deleteFile = async (orderId: string, fileId: number): Promise<void> => {
   await apiClient.delete(`/orders/${orderId}/files/${fileId}`);
+};
+
+/**
+ * Повторить заказ
+ */
+export const duplicateOrder = async (orderId: string): Promise<Order> => {
+  const response = await apiClient.post<Order>(`/orders/${orderId}/duplicate`);
+  return response.data;
+};
+
+/**
+ * Назначение менеджера на заказ
+ */
+export const assignManager = async (id: string, managerId: string): Promise<Order> => {
+  const response = await apiClient.patch<Order>(`/orders/${id}/assign-manager`, { manager_id: managerId });
+  return response.data;
 };
 
 /**
