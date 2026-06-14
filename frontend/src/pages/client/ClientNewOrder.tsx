@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { mutationOnError, showApiError } from "@/lib/apiError";
 
 import { createOrder, uploadFile } from "@/api/orders";
 import { apiClient } from "@/api/axios";
@@ -16,6 +17,10 @@ import { Label } from "@/components/ui/label";
 import { FileUpload } from "@/components/shared/FileUpload";
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import type { Service, ServiceCategory } from "@/types";
+import { formatPrice } from "@/utils";
+import type { DiscountSource } from "@/utils/discountLabel";
+import { ClientDiscountInfo } from "@/components/client/ClientDiscountInfo";
+import { OrderDiscountSummary } from "@/components/client/OrderDiscountSummary";
 
 // =============================================================================
 // Схема формы
@@ -45,8 +50,15 @@ export const ClientNewOrder = () => {
   const navigate = useNavigate();
   const { user } = authStore();
   const [step, setStep] = useState(1);
+  const clientId = user?.client_profile?.id;
+  const totalSpent = Number(user?.client_profile?.total_spent ?? 0);
   const [calculatedTotal, setCalculatedTotal] = useState<number>(0);
   const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [discountSource, setDiscountSource] = useState<DiscountSource>("none");
+  const [loyaltyPercent, setLoyaltyPercent] = useState<number>(0);
+  const [promotionPercent, setPromotionPercent] = useState<number>(0);
+  const [promotionTitle, setPromotionTitle] = useState<string | null>(null);
   const [finalPrice, setFinalPrice] = useState<number>(0);
   const [files, setFiles] = useState<File[]>([]);
 
@@ -89,9 +101,8 @@ export const ClientNewOrder = () => {
           localStorage.removeItem("pending_order");
         }
       } catch (e) {
-        console.error("Ошибка загрузки данных из калькулятора:", e);
         localStorage.removeItem("pending_order");
-        toast.error("Ошибка загрузки данных из калькулятора");
+        showApiError(e, "Ошибка загрузки данных из калькулятора");
       }
     }
   }, [reset]);
@@ -125,16 +136,28 @@ export const ClientNewOrder = () => {
       const validItems = items.filter((i) => i.service_id > 0);
       if (validItems.length === 0) {
         setCalculatedTotal(0);
+        setDiscountAmount(0);
+        setDiscountPercent(0);
+        setDiscountSource("none");
+        setLoyaltyPercent(0);
+        setPromotionPercent(0);
+        setPromotionTitle(null);
         setFinalPrice(0);
         return null;
       }
 
       const response = await apiClient.post("/calculator/calculate", {
         items: validItems.map((i) => ({ service_id: i.service_id, quantity: i.quantity })),
+        ...(clientId ? { client_id: clientId } : {}),
       });
 
       setCalculatedTotal(Number(response.data.subtotal));
       setDiscountAmount(Number(response.data.discount_amount));
+      setDiscountPercent(Number(response.data.discount_percent));
+      setDiscountSource(response.data.discount_source ?? "none");
+      setLoyaltyPercent(Number(response.data.loyalty_discount_percent ?? 0));
+      setPromotionPercent(Number(response.data.promotion_discount_percent ?? 0));
+      setPromotionTitle(response.data.applied_promotion_title ?? null);
       setFinalPrice(Number(response.data.final_price));
       return response.data;
     },
@@ -150,14 +173,14 @@ export const ClientNewOrder = () => {
           await Promise.all(files.map((file) => uploadFile(order.id, file)));
           toast.success(`Заказ создан и файлы загружены (${files.length})`);
         } catch (error) {
-          toast.error("Заказ создан, но произошла ошибка при загрузке файлов");
+          showApiError(error, "Заказ создан, но произошла ошибка при загрузке файлов");
         }
       } else {
         toast.success("Заказ создан");
       }
       navigate(`/client/orders/${order.id}`);
     },
-    onError: () => toast.error("Ошибка создания заказа"),
+    onError: mutationOnError("Ошибка создания заказа"),
   });
 
   const onSubmit = (data: OrderFormData) => {
@@ -181,11 +204,10 @@ export const ClientNewOrder = () => {
     createMutation.mutate(validData);
   };
 
-  const formatPrice = (price: number) =>
-    new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(price);
-
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      <ClientDiscountInfo variant="banner" />
+
       {/* Steps indicator */}
       <div className="flex justify-center gap-4">
         {[1, 2, 3].map((s) => (
@@ -253,21 +275,18 @@ export const ClientNewOrder = () => {
               </Button>
 
               {finalPrice > 0 && (
-                <div className="p-4 bg-muted rounded-lg space-y-2">
-                  <div className="flex justify-between">
-                    <span>Подытог:</span>
-                    <span>{formatPrice(calculatedTotal)}</span>
-                  </div>
-                  {discountAmount > 0 && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Скидка:</span>
-                      <span>-{formatPrice(discountAmount)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-lg font-bold pt-2 border-t">
-                    <span>Итого:</span>
-                    <span>{formatPrice(finalPrice)}</span>
-                  </div>
+                <div className="p-4 bg-muted rounded-lg">
+                  <OrderDiscountSummary
+                    subtotal={calculatedTotal}
+                    discountAmount={discountAmount}
+                    discountPercent={discountPercent}
+                    finalPrice={finalPrice}
+                    discountSource={discountSource}
+                    loyaltyPercent={loyaltyPercent}
+                    promotionPercent={promotionPercent}
+                    promotionTitle={promotionTitle}
+                    totalSpent={totalSpent}
+                  />
                 </div>
               )}
 
@@ -337,10 +356,19 @@ export const ClientNewOrder = () => {
                   })}
                 </ul>
               </div>
-              <div className="flex justify-between text-lg font-bold">
-                <span>Итого к оплате:</span>
-                <span>{formatPrice(finalPrice)}</span>
-              </div>
+              {finalPrice > 0 && (
+                <OrderDiscountSummary
+                  subtotal={calculatedTotal}
+                  discountAmount={discountAmount}
+                  discountPercent={discountPercent}
+                  finalPrice={finalPrice}
+                  discountSource={discountSource}
+                  loyaltyPercent={loyaltyPercent}
+                  promotionPercent={promotionPercent}
+                  promotionTitle={promotionTitle}
+                  totalSpent={totalSpent}
+                />
+              )}
               <div className="flex justify-between pt-4">
                 <Button type="button" variant="outline" onClick={() => setStep(2)}>
                   <ChevronLeft className="mr-2 h-4 w-4" /> Назад

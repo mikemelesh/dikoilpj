@@ -5,11 +5,20 @@ import type { UserRole, User } from "@/types";
 
 interface ClientProfile {
   id: number;
+  client_type?: "physical" | "legal";
   clinic_name?: string;
   address?: string;
   discount_percent: number;
   loyalty_tier: string;
   total_orders: number;
+  total_spent?: number;
+  loyalty_progress?: {
+    current_discount_percent: number;
+    next_discount_percent: number | null;
+    next_threshold_spent: number | null;
+    amount_to_next: number;
+    is_max_tier: boolean;
+  };
 }
 
 interface TechnicianProfile {

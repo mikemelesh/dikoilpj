@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 import { apiClient } from "@/api/axios";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, X, Download } from "lucide-react";
 import { ExportButton } from "@/components/shared/ExportButton";
+import { formatDate } from "@/utils";
 
 interface User { id: string; email: string; first_name?: string; last_name?: string; role: string; is_active: boolean; created_at: string }
 
@@ -38,13 +40,13 @@ export const AdminUsers = () => {
   const roleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) => apiClient.patch(`/admin/users/${userId}/role`, { role }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-users"] }); toast.success("Роль изменена"); setEditModal({ user: null, open: false, role: "client", is_active: true }); },
-    onError: () => toast.error("Ошибка изменения роли"),
+    onError: mutationOnError("Ошибка изменения роли"),
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ userId, is_active }: { userId: string; is_active: boolean }) => apiClient.patch(`/admin/users/${userId}/status`, { is_active }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-users"] }); toast.success("Статус изменён"); setEditModal({ user: null, open: false, role: "client", is_active: true }); },
-    onError: () => toast.error("Ошибка изменения статуса"),
+    onError: mutationOnError("Ошибка изменения статуса"),
   });
 
   const handleSave = () => {
@@ -131,7 +133,7 @@ export const AdminUsers = () => {
                       <TableCell>{user.email}</TableCell>
                       <TableCell><Badge className={ROLE_COLORS[user.role] || "bg-muted"}>{user.role}</Badge></TableCell>
                       <TableCell><Badge variant={user.is_active ? "default" : "secondary"}>{user.is_active ? "Активен" : "Неактивен"}</Badge></TableCell>
-                      <TableCell>{new Date(user.created_at).toLocaleDateString("ru-RU")}</TableCell>
+                      <TableCell>{formatDate(user.created_at)}</TableCell>
                       <TableCell>
                         <Button variant="outline" size="sm" onClick={() => setEditModal({ user, open: true, role: user.role, is_active: user.is_active })}>Изменить</Button>
                       </TableCell>

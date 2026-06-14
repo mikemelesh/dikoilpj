@@ -26,98 +26,14 @@ from .models.article import Article
 from .models.promotion import Promotion, PromotionAppliesTo
 from .models.knowledge import KnowledgeBase
 from .utils.security import get_password_hash
+from .seed_content import ARTICLES_DATA, KNOWLEDGE_BASE_DATA, USERS_DATA
 
 
 def create_users(db: Session) -> dict:
     """Создание тестовых пользователей."""
     print("📝 Создание пользователей...")
     
-    users_data = [
-        # Admin
-        {
-            "email": "admin@dental-lab.ru",
-            "password": "Admin123!",
-            "role": UserRole.ADMIN,
-            "first_name": "Админ",
-            "last_name": "Главный",
-            "phone": "+7 (999) 000-00-00",
-        },
-        # Managers
-        {
-            "email": "manager1@dental-lab.ru",
-            "password": "Manager123!",
-            "role": UserRole.MANAGER,
-            "first_name": "Иван",
-            "last_name": "Менеджеров",
-            "phone": "+7 (999) 111-11-11",
-        },
-        {
-            "email": "manager2@dental-lab.ru",
-            "password": "Manager123!",
-            "role": UserRole.MANAGER,
-            "first_name": "Мария",
-            "last_name": "Управленцева",
-            "phone": "+7 (999) 222-22-22",
-        },
-        # Technicians
-        {
-            "email": "technician1@dental-lab.ru",
-            "password": "Tech123!",
-            "role": UserRole.TECHNICIAN,
-            "first_name": "Алексей",
-            "last_name": "Техников",
-            "phone": "+7 (999) 333-33-33",
-        },
-        {
-            "email": "technician2@dental-lab.ru",
-            "password": "Tech123!",
-            "role": UserRole.TECHNICIAN,
-            "first_name": "Дмитрий",
-            "last_name": "Мастеров",
-            "phone": "+7 (999) 444-44-44",
-        },
-        {
-            "email": "technician3@dental-lab.ru",
-            "password": "Tech123!",
-            "role": UserRole.TECHNICIAN,
-            "first_name": "Елена",
-            "last_name": "Зубова",
-            "phone": "+7 (999) 555-55-55",
-        },
-        # Clients
-        {
-            "email": "client1@dental-lab.ru",
-            "password": "Client123!",
-            "role": UserRole.CLIENT,
-            "first_name": "Петр",
-            "last_name": "Клиентов",
-            "phone": "+7 (999) 666-66-66",
-        },
-        {
-            "email": "client2@dental-lab.ru",
-            "password": "Client123!",
-            "role": UserRole.CLIENT,
-            "first_name": "Анна",
-            "last_name": "Стоматологова",
-            "phone": "+7 (999) 777-77-77",
-        },
-        {
-            "email": "client3@dental-lab.ru",
-            "password": "Client123!",
-            "role": UserRole.CLIENT,
-            "first_name": "Сергей",
-            "last_name": "Врачев",
-            "phone": "+7 (999) 888-88-88",
-        },
-        {
-            "email": "client4@dental-lab.ru",
-            "password": "Client123!",
-            "role": UserRole.CLIENT,
-            "first_name": "Ольга",
-            "last_name": "Улыбкина",
-            "phone": "+7 (999) 999-99-99",
-        },
-    ]
+    users_data = USERS_DATA
     
     users = {}
     for user_data in users_data:
@@ -279,34 +195,12 @@ def create_services(db: Session) -> dict:
     """Создание категорий и услуг."""
     print("\n💼 Создание услуг...")
     
-    categories_data = [
-        {"name": "Несъемные протезы", "description": "Коронки, мосты, виниры", "icon_url": None, "sort_order": 1},
-        {"name": "Съемные протезы", "description": "Частичные и полные протезы", "icon_url": None, "sort_order": 2},
-        {"name": "Имплантация", "description": "Услуги по имплантации", "icon_url": None, "sort_order": 3},
-        {"name": "Ортодонтия", "description": "Брекеты, элайнеры", "icon_url": None, "sort_order": 4},
-        {"name": "Дополнительные услуги", "description": "Прочие услуги", "icon_url": None, "sort_order": 5},
-    ]
-    
-    categories = {}
-    for cat_data in categories_data:
-        existing = db.query(ServiceCategory).filter(ServiceCategory.name == cat_data["name"]).first()
-        if existing:
-            categories[cat_data["name"]] = existing
-            continue
-        
-        category = ServiceCategory(
-            name=cat_data["name"],
-            description=cat_data["description"],
-            icon_url=cat_data["icon_url"],
-            sort_order=cat_data["sort_order"],
-            is_active=True,
-        )
-        db.add(category)
-        db.flush()
-        categories[category.name] = category
+    from .utils.service_categories import ensure_predefined_categories
+
+    ensured = ensure_predefined_categories(db)
+    categories = {c.name: c for c in ensured}
+    for category in ensured:
         print(f"  ✅ Категория: {category.name}")
-    
-    db.commit()
     
     services_data = [
         # Несъемные протезы
@@ -709,96 +603,7 @@ def create_articles(db: Session, users: dict) -> list:
     """Создание статей."""
     print("\nSozdanie statey...")
 
-    articles_data = [
-        {
-            "title": "Современные материалы в зуботехнической лаборатории",
-            "slug": "sovremennye-materialy-v-zubotehnicheskoj-laboratorii",
-            "category": "Материалы",
-            "content": """
-# Современные материалы в зуботехнической лаборатории
-
-В современной стоматологии используются различные материалы для изготовления протезов:
-
-## Керамика
-- **E-max** - прессованная керамика на основе дисиликата лития
-- **Цирконий** - диоксид циркония с высокой прочностью
-
-## Металлокерамика
-Классический вариант, сочетающий прочность металла и эстетику керамики.
-
-## Преимущества современных материалов
-1. Высокая эстетика
-2. Биосовместимость
-3. Долговечность
-""",
-            "is_published": True,
-        },
-        {
-            "title": "Как ухаживать за зубными протезами",
-            "slug": "kak-uhazhivat-za-zubnymi-protezami",
-            "category": "Уход",
-            "content": """
-# Как ухаживать за зубными протезами
-
-Правильный уход за протезами продлит срок их службы.
-
-## Ежедневный уход
-- Чистка специальной щеткой
-- Использование таблеток для очистки
-- Промывание после еды
-
-## Что нельзя делать
-❌ Использовать обычную зубную пасту
-❌ Кипятить протезы
-❌ Использовать отбеливатели
-""",
-            "is_published": True,
-        },
-        {
-            "title": "Этапы изготовления коронки",
-            "slug": "etapy-izgotovleniya-koronki",
-            "category": "Технология",
-            "content": """
-# Этапы изготовления коронки
-
-## 1. Получение слепка
-Врач снимает слепок с подготовленного зуба.
-
-## 2. Моделирование
-Техник создает восковую модель будущей коронки.
-
-## 3. Формовка
-Изготовление формы для литья или прессования.
-
-## 4. Изготовление
-Создание коронки из выбранного материала.
-
-## 5. Глазировка
-Нанесение глазури для придания блеска.
-""",
-            "is_published": True,
-        },
-        {
-            "title": "Новое оборудование в нашей лаборатории",
-            "slug": "novoe-oborudovanie-v-nashej-laboratorii",
-            "category": "Новости",
-            "content": """
-# Новое оборудование в нашей лаборатории
-
-Мы обновили парк оборудования:
-
-- **3D принтер Formlabs** - для печати моделей
-- **Фрезерный станок Roland** - для обработки циркония
-- **Печь для обжига** - нового поколения
-
-Это позволит нам:
-- Увеличить скорость работы
-- Повысить точность изделий
-- Расширить ассортимент услуг
-""",
-            "is_published": True,
-        },
-    ]
+    articles_data = ARTICLES_DATA
     
     articles = []
     manager = users.get("manager1@dental-lab.ru")
@@ -830,64 +635,7 @@ def create_knowledge_base(db: Session, users: dict) -> list:
     """Создание записей базы знаний."""
     print("\nSozdanie bazi znaniy...")
 
-    kb_data = [
-        {
-            "title": "Техника безопасности при работе с полимерами",
-            "content": """
-# Техника безопасности
-
-## Основные правила
-1. Работать в перчатках
-2. Использовать вытяжку
-3. Избегать попадания на кожу
-
-## Средства защиты
-- Перчатки нитриловые
-- Защитные очки
-- Респиратор
-""",
-            "category": "technology",
-            "tags": ["безопасность", "полимеры"],
-            "is_published": True,
-        },
-        {
-            "title": "Работа с диоксидом циркония",
-            "content": """
-# Обработка циркония
-
-## Оборудование
-- Фрезерный станок с ЧПУ
-- Печь для спекания
-
-## Параметры фрезеровки
-- Скорость: 800-1200 об/мин
-- Подача: 0.1-0.3 мм/зуб
-""",
-            "category": "materials",
-            "tags": ["цирконий", "фрезеровка"],
-            "is_published": True,
-        },
-        {
-            "title": "Устранение сколов керамики",
-            "content": """
-# Ремонт сколов
-
-## Материалы
-- Ремонтный набор
-- Адгезив
-- Керамическая масса
-
-## Этапы
-1. Обработка поверхности
-2. Нанесение адгезива
-3. Нанесение керамики
-4. Обжиг
-""",
-            "category": "troubleshooting",
-            "tags": ["ремонт", "керамика"],
-            "is_published": True,
-        },
-    ]
+    kb_data = KNOWLEDGE_BASE_DATA
 
     knowledge_base = []
     manager = users.get("manager1@dental-lab.ru")
@@ -906,7 +654,7 @@ def create_knowledge_base(db: Session, users: dict) -> list:
             category=kb_item["category"],
             tags=kb_item["tags"],
             created_by=manager.id if manager else None,
-            is_published=kb_item["is_published"],
+            is_published=kb_item.get("is_published", True),
         )
         db.add(record)
         db.flush()
@@ -922,6 +670,7 @@ def create_promotions(db: Session) -> list:
     print("\nSozdanie aksiy...")
     
     today = datetime.now().date()
+    zirconia_service = db.query(Service).filter(Service.name == "Коронка циркониевая").first()
     
     promotions_data = [
         {
@@ -931,6 +680,7 @@ def create_promotions(db: Session) -> list:
             "start_date": today - timedelta(days=5),
             "end_date": today + timedelta(days=25),
             "applies_to": PromotionAppliesTo.SERVICE,
+            "target_id": zirconia_service.id if zirconia_service else None,
             "is_active": True,
         },
         {
@@ -957,6 +707,9 @@ def create_promotions(db: Session) -> list:
     for promo_data in promotions_data:
         existing = db.query(Promotion).filter(Promotion.title == promo_data["title"]).first()
         if existing:
+            if promo_data.get("target_id") is not None and existing.target_id != promo_data["target_id"]:
+                existing.target_id = promo_data["target_id"]
+                db.add(existing)
             promotions.append(existing)
             continue
         
@@ -967,6 +720,7 @@ def create_promotions(db: Session) -> list:
             start_date=promo_data["start_date"],
             end_date=promo_data["end_date"],
             applies_to=promo_data["applies_to"],
+            target_id=promo_data.get("target_id"),
             is_active=promo_data["is_active"],
         )
         db.add(promotion)
@@ -1018,14 +772,19 @@ def seed_all():
         # Создаем акции
         create_promotions(db)
 
+        # Демо-наполнение (много заказов, клиентов, отзывов)
+        from .seed_bulk import seed_bulk_demo
+
+        seed_bulk_demo(db, users, clients, technicians)
+
+        order_count = db.query(Order).count()
+        client_count = db.query(Client).count()
+        user_count = db.query(User).count()
+
         print("\nBaza dannih uspeshno zapolnena!")
-        print(f"   - Polzovateley: 10")
-        print(f"   - Klientov: 4")
-        print(f"   - Tehnikov: 3")
-        print(f"   - Zakazov: 9")
-        print(f"   - Statey: 4")
-        print(f"   - BZ: 3")
-        print(f"   - Aksiy: 3")
+        print(f"   - Polzovateley: {user_count}")
+        print(f"   - Klientov: {client_count}")
+        print(f"   - Zakazov: {order_count}")
         
     except Exception as e:
         db.rollback()

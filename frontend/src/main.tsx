@@ -1,17 +1,24 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { AuthQueryCacheListener } from "./components/AuthQueryCacheListener";
+import { getApiErrorMessage } from "@/lib/apiError";
 import "./index.css";
 
 import "react-toastify/dist/ReactToastify.css";
 
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error, query) => {
+      if (query.meta?.skipErrorToast) return;
+      toast.error(getApiErrorMessage(error, "Не удалось загрузить данные"));
+    },
+  }),
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false,

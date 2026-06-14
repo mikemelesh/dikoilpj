@@ -211,7 +211,8 @@ async def get_technician_analytics(
             Order.technician_id == tech.id,
             Order.status == OrderStatus.COMPLETED,
             Order.deadline.isnot(None),
-            Order.completed_at <= Order.deadline,
+            Order.completed_at.isnot(None),
+            func.date(Order.completed_at) <= Order.deadline,
         ).scalar() or 0
         
         on_time_percent = (on_time / total_with_deadline * 100) if total_with_deadline > 0 else 100.0

@@ -34,25 +34,18 @@ from .models.article import Article
 from .models.promotion import Promotion, PromotionAppliesTo
 from .models.knowledge import KnowledgeBase
 from .models.faq import Faq
+from .models.notification import Notification
+from .models.order_template import OrderTemplate
 from .utils.security import get_password_hash
+from .clear_db import flush_all_data
+from .seed_content import ARTICLES_DATA, KNOWLEDGE_BASE_DATA, USERS_DATA
 
 
 def create_users(db: Session) -> dict:
     """Создание тестовых пользователей."""
     print("📝 Создание пользователей...")
 
-    users_data = [
-        {"email": "admin@dental-lab.ru", "password": "Admin123!", "role": UserRole.ADMIN, "first_name": "Админ", "last_name": "Главный", "phone": "+7 (999) 000-00-00"},
-        {"email": "manager1@dental-lab.ru", "password": "Manager123!", "role": UserRole.MANAGER, "first_name": "Иван", "last_name": "Менеджеров", "phone": "+7 (999) 111-11-11"},
-        {"email": "manager2@dental-lab.ru", "password": "Manager123!", "role": UserRole.MANAGER, "first_name": "Мария", "last_name": "Управленцева", "phone": "+7 (999) 222-22-22"},
-        {"email": "technician1@dental-lab.ru", "password": "Tech123!", "role": UserRole.TECHNICIAN, "first_name": "Алексей", "last_name": "Техников", "phone": "+7 (999) 333-33-33"},
-        {"email": "technician2@dental-lab.ru", "password": "Tech123!", "role": UserRole.TECHNICIAN, "first_name": "Дмитрий", "last_name": "Мастеров", "phone": "+7 (999) 444-44-44"},
-        {"email": "technician3@dental-lab.ru", "password": "Tech123!", "role": UserRole.TECHNICIAN, "first_name": "Елена", "last_name": "Зубова", "phone": "+7 (999) 555-55-55"},
-        {"email": "client1@dental-lab.ru", "password": "Client123!", "role": UserRole.CLIENT, "first_name": "Петр", "last_name": "Клиентов", "phone": "+7 (999) 666-66-66"},
-        {"email": "client2@dental-lab.ru", "password": "Client123!", "role": UserRole.CLIENT, "first_name": "Анна", "last_name": "Стоматологова", "phone": "+7 (999) 777-77-77"},
-        {"email": "client3@dental-lab.ru", "password": "Client123!", "role": UserRole.CLIENT, "first_name": "Сергей", "last_name": "Врачев", "phone": "+7 (999) 888-88-88"},
-        {"email": "client4@dental-lab.ru", "password": "Client123!", "role": UserRole.CLIENT, "first_name": "Ольга", "last_name": "Улыбкина", "phone": "+7 (999) 999-99-99"},
-    ]
+    users_data = USERS_DATA
 
     users = {}
     for user_data in users_data:
@@ -170,34 +163,12 @@ def create_services(db: Session) -> dict:
     """Создание категорий и услуг."""
     print("\n💼 Создание услуг...")
 
-    categories_data = [
-        {"name": "Несъемные протезы", "description": "Коронки, мосты, виниры", "icon_url": None, "sort_order": 1},
-        {"name": "Съемные протезы", "description": "Частичные и полные протезы", "icon_url": None, "sort_order": 2},
-        {"name": "Имплантация", "description": "Услуги по имплантации", "icon_url": None, "sort_order": 3},
-        {"name": "Ортодонтия", "description": "Брекеты, элайнеры", "icon_url": None, "sort_order": 4},
-        {"name": "Дополнительные услуги", "description": "Прочие услуги", "icon_url": None, "sort_order": 5},
-    ]
+    from .utils.service_categories import ensure_predefined_categories
 
-    categories = {}
-    for cat_data in categories_data:
-        existing = db.query(ServiceCategory).filter(ServiceCategory.name == cat_data["name"]).first()
-        if existing:
-            categories[cat_data["name"]] = existing
-            continue
-
-        category = ServiceCategory(
-            name=cat_data["name"],
-            description=cat_data["description"],
-            icon_url=cat_data["icon_url"],
-            sort_order=cat_data["sort_order"],
-            is_active=True,
-        )
-        db.add(category)
-        db.flush()
-        categories[category.name] = category
+    ensured = ensure_predefined_categories(db)
+    categories = {c.name: c for c in ensured}
+    for category in ensured:
         print(f"  ✅ Категория: {category.name}")
-
-    db.commit()
 
     services_data = [
         {"name": "Коронка металлокерамическая", "category": "Несъемные протезы", "base_price": 525, "unit": "шт", "duration_days": 7},
@@ -274,6 +245,7 @@ def create_orders(db: Session, clients: dict, technicians: dict, services: dict,
             {"technician_idx": 2, "status": OrderStatus.ARCHIVED, "priority": OrderPriority.NORMAL, "services": ["Ретенционная пластинка"], "notes": "Архивный заказ", "deadline_days": 0, "completed_days_ago": 60},
             {"technician_idx": 0, "status": OrderStatus.COMPLETED, "priority": OrderPriority.NORMAL, "services": ["Винир керамический"], "notes": "Выполнен качественно", "deadline_days": 10, "completed_days_ago": 15},
             {"technician_idx": 1, "status": OrderStatus.CONFIRMED, "priority": OrderPriority.URGENT, "services": ["Мостовидный протез (3 ед)"], "notes": "Важный заказ", "deadline_days": 12},
+            {"technician_idx": 0, "status": OrderStatus.CANCELLED, "priority": OrderPriority.NORMAL, "services": ["Коронка металлокерамическая"], "notes": "Отменён клиентом", "deadline_days": 7},
         ],
         1: [  # client2 - 5 заказов
             {"technician_idx": 1, "status": OrderStatus.IN_PROGRESS, "priority": OrderPriority.URGENT, "services": ["Винир керамический"], "notes": "Важный клиент", "deadline_days": 10},
@@ -281,6 +253,7 @@ def create_orders(db: Session, clients: dict, technicians: dict, services: dict,
             {"technician_idx": 0, "status": OrderStatus.COMPLETED, "priority": OrderPriority.NORMAL, "services": ["Коронка металлокерамическая"], "notes": "Успешно выполнен", "deadline_days": 7, "completed_days_ago": 10},
             {"technician_idx": 1, "status": OrderStatus.NEW, "priority": OrderPriority.NORMAL, "services": ["Полный съемный протез"], "notes": "Новый заказ", "deadline_days": 14},
             {"technician_idx": None, "status": OrderStatus.CONFIRMED, "priority": OrderPriority.NORMAL, "services": ["Абатмент стандартный"], "notes": "Ожидает назначения техника", "deadline_days": 7},
+            {"technician_idx": 2, "status": OrderStatus.CANCELLED, "priority": OrderPriority.URGENT, "services": ["Каппа ретенционная"], "notes": "Отменён из-за изменения плана лечения", "deadline_days": 5},
         ],
         2: [  # client3 - 6 заказов
             {"technician_idx": 0, "status": OrderStatus.CONFIRMED, "priority": OrderPriority.NORMAL, "services": ["Мостовидный протез (3 ед)", "Коронка металлокерамическая"], "notes": "Комплексный заказ", "deadline_days": 14},
@@ -460,6 +433,7 @@ def create_material_requests(db: Session, materials: list, technicians: dict, us
         {"material_idx": 5, "technician_idx": 1, "quantity": 100, "status": MaterialRequestStatus.APPROVED, "comment": "Для 3D печати"},
         {"material_idx": 3, "technician_idx": 2, "quantity": 200, "status": MaterialRequestStatus.PENDING, "comment": None},
         {"material_idx": 1, "technician_idx": 0, "quantity": 30, "status": MaterialRequestStatus.REJECTED, "comment": "Превышен лимит"},
+        {"material_idx": 2, "technician_idx": 2, "quantity": 75, "status": MaterialRequestStatus.ISSUED, "comment": "Выдано со склада"},
     ]
 
     requests = []
@@ -495,35 +469,43 @@ def create_reviews(db: Session, clients: dict, orders: list) -> list:
     """Создание отзывов."""
     print("\n⭐ Создание отзывов...")
 
+    completed_orders = [o for o in orders if o.status == OrderStatus.COMPLETED]
+    client_ids = list(clients.keys())
+
     reviews_data = [
-        {"client_idx": 0, "order_idx": 6, "rating": 5, "text": "Отличное качество! Все сроки соблюдены. Буду заказывать еще."},
-        {"client_idx": 1, "order_idx": 7, "rating": 4, "text": "Хорошая работа, но немного задержали срок."},
-        {"client_idx": 2, "order_idx": 5, "rating": 5, "text": "Превосходное качество керамики. Клиент доволен!"},
-        {"client_idx": 3, "order_idx": 4, "rating": 5, "text": "Профессиональный подход к работе. Рекомендую!"},
+        {"client_idx": 0, "order": completed_orders[0] if len(completed_orders) > 0 else None, "rating": 5, "text": "Отличное качество! Все сроки соблюдены. Буду заказывать ещё.", "is_moderated": True, "is_published": True},
+        {"client_idx": 1, "order": completed_orders[1] if len(completed_orders) > 1 else None, "rating": 4, "text": "Хорошая работа, но немного задержали срок.", "is_moderated": True, "is_published": True},
+        {"client_idx": 2, "order": completed_orders[2] if len(completed_orders) > 2 else None, "rating": 5, "text": "Превосходное качество керамики. Клиент доволен!", "is_moderated": True, "is_published": True},
+        {"client_idx": 3, "order": completed_orders[3] if len(completed_orders) > 3 else None, "rating": 5, "text": "Профессиональный подход к работе. Рекомендую!", "is_moderated": True, "is_published": True},
+        {"client_idx": 0, "order": completed_orders[4] if len(completed_orders) > 4 else None, "rating": 4, "text": "Качество на высоте, цвет коронки совпал идеально.", "is_moderated": True, "is_published": True},
+        {"client_idx": 1, "order": completed_orders[5] if len(completed_orders) > 5 else None, "rating": 3, "text": "Пришлось доработать посадку, но в целом неплохо.", "is_moderated": True, "is_published": False},
+        {"client_idx": 2, "order": None, "rating": 5, "text": "Лучшая лаборатория в городе, работаем уже третий год.", "is_moderated": False, "is_published": False},
+        {"client_idx": 3, "order": completed_orders[6] if len(completed_orders) > 6 else None, "rating": 4, "text": "Быстро выполнили срочный заказ, спасибо менеджеру.", "is_moderated": True, "is_published": True},
+        {"client_idx": 1, "order": None, "rating": 2, "text": "Долго ждали ответа по статусу заказа.", "is_moderated": False, "is_published": False},
+        {"client_idx": 0, "order": completed_orders[7] if len(completed_orders) > 7 else None, "rating": 5, "text": "Виниры выглядят естественно, пациент в восторге.", "is_moderated": True, "is_published": True},
     ]
 
     reviews = []
-    client_ids = list(clients.keys())
-
     for rev_data in reviews_data:
         if rev_data["client_idx"] >= len(client_ids):
             continue
 
         client = clients[client_ids[rev_data["client_idx"]]]
-        order = orders[rev_data["order_idx"]] if rev_data["order_idx"] < len(orders) else None
+        order = rev_data.get("order")
 
         review = Review(
             client_id=client.id,
             order_id=order.id if order else None,
             rating=rev_data["rating"],
             text=rev_data["text"],
-            is_moderated=True,
-            is_published=True,
+            is_moderated=rev_data["is_moderated"],
+            is_published=rev_data["is_published"],
         )
         db.add(review)
         db.flush()
         reviews.append(review)
-        print(f"  ✅ Отзыв: {client.clinic_name} - {rev_data['rating']}⭐")
+        status = "опубликован" if rev_data["is_published"] else "на модерации"
+        print(f"  ✅ Отзыв: {client.clinic_name} - {rev_data['rating']}⭐ ({status})")
 
     db.commit()
     return reviews
@@ -533,12 +515,7 @@ def create_articles(db: Session, users: dict) -> list:
     """Создание статей."""
     print("\nСоздание статей...")
 
-    articles_data = [
-        {"title": "Современные материалы в зуботехнической лаборатории", "slug": "sovremennye-materialy", "category": "Материалы", "content": "# Современные материалы\n\nВ современной стоматологии используются различные материалы...", "is_published": True},
-        {"title": "Как ухаживать за зубными протезами", "slug": "kak-uhazhivat-za-protezami", "category": "Уход", "content": "# Уход за протезами\n\nПравильный уход продлевает срок службы протезов...", "is_published": True},
-        {"title": "Этапы изготовления коронки", "slug": "etapy-izgotovleniya-koronki", "category": "Технология", "content": "# Этапы работы\n\nПроцесс изготовления коронки включает несколько этапов...", "is_published": True},
-        {"title": "Новое оборудование в нашей лаборатории", "slug": "novoe-oborudovanie", "category": "Новости", "content": "# Обновление парка\n\nМы установили новый 3D принтер...", "is_published": True},
-    ]
+    articles_data = ARTICLES_DATA
 
     articles = []
     admin_user = users.get("admin@dental-lab.ru")
@@ -570,11 +547,7 @@ def create_knowledge_base(db: Session, users: dict) -> list:
     """Создание базы знаний."""
     print("\nСоздание базы знаний...")
 
-    kb_data = [
-        {"title": "Техника безопасности при работе с полимерами", "category": "Безопасность", "content": "# Правила безопасности\n\n1. Используйте перчатки\n2. Работайте в проветриваемом помещении...", "tags": ["безопасность", "полимеры"]},
-        {"title": "Работа с диоксидом циркония", "category": "Материалы", "content": "# Обработка циркония\n\nТемпература обжига: 1500°C...", "tags": ["цирконий", "технология"]},
-        {"title": "Устранение сколов керамики", "category": "Ремонт", "content": "# Ремонт сколов\n\nИспользуйте специальный ремонтный состав...", "tags": ["ремонт", "керамика"]},
-    ]
+    kb_data = KNOWLEDGE_BASE_DATA
 
     knowledge = []
     admin_user = users.get("admin@dental-lab.ru")
@@ -608,10 +581,21 @@ def create_promotions(db: Session) -> list:
 
     from datetime import date, timedelta
 
+    from .models.service import Service
+
     today = date.today()
+    zirconia_service = db.query(Service).filter(Service.name == "Коронка циркониевая").first()
 
     promotions_data = [
-        {"title": "Скидка 15% на циркониевые коронки", "description": "При заказе от 3-х единиц", "discount_percent": 15, "start_days": -5, "end_days": 25, "applies_to": "service", "target_id": None},
+        {
+            "title": "Скидка 15% на циркониевые коронки",
+            "description": "При заказе от 3-х единиц",
+            "discount_percent": 15,
+            "start_days": -5,
+            "end_days": 25,
+            "applies_to": "service",
+            "target_id": zirconia_service.id if zirconia_service else None,
+        },
         {"title": "Новогодняя акция", "description": "Скидка 20% на все услуги", "discount_percent": 20, "start_days": -30, "end_days": 10, "applies_to": "all", "target_id": None},
         {"title": "Бесплатная консультация техника", "description": "При первом заказе", "discount_percent": 0, "start_days": -1, "end_days": 60, "applies_to": "all", "target_id": None},
     ]
@@ -620,6 +604,9 @@ def create_promotions(db: Session) -> list:
     for promo_data in promotions_data:
         existing = db.query(Promotion).filter(Promotion.title == promo_data["title"]).first()
         if existing:
+            if promo_data["target_id"] is not None and existing.target_id != promo_data["target_id"]:
+                existing.target_id = promo_data["target_id"]
+                db.add(existing)
             promotions.append(existing)
             continue
 
@@ -657,6 +644,11 @@ def create_faqs(db: Session) -> list:
         {"question": "Можно ли заказать срочное изготовление?", "answer": "Да, при оформлении заказа выберите приоритет «Срочный» или «Критичный». Обратите внимание, что за срочность может взиматься дополнительная плата.", "category": "Заказы", "sort_order": 8},
         {"question": "Как происходит оплата?", "answer": "Оплата производится после завершения заказа и перед выдачей. Возможна оплата наличными или безналичным расчётом.", "category": "Оплата", "sort_order": 9},
         {"question": "Можно ли вернуть заказ?", "answer": "Возврат возможен в случае брака или несоответствия specifications. Свяжитесь с менеджером в течение 3 дней после получения заказа.", "category": "Возврат", "sort_order": 10},
+        {"question": "Как связаться с менеджером?", "answer": "Менеджер свяжется с вами после оформления заказа. Также вы можете написать через форму обратной связи или позвонить по телефону лаборатории.", "category": "Контакты", "sort_order": 11},
+        {"question": "Работаете ли вы с цифровыми слепками?", "answer": "Да, мы принимаем файлы STL/OBJ от intraoral-сканеров. Укажите формат в комментарии к заказу.", "category": "Заказы", "sort_order": 12},
+        {"question": "Можно ли повторить предыдущий заказ?", "answer": "В архиве заказов доступна кнопка «Повторить» — она создаст новый заказ на основе предыдущего.", "category": "Заказы", "sort_order": 13},
+        {"question": "Какие документы вы предоставляете?", "answer": "По запросу выдаём акт выполненных работ и счёт. Документы доступны в личном кабинете после завершения заказа.", "category": "Оплата", "sort_order": 14},
+        {"question": "Есть ли доставка готовых работ?", "answer": "Да, доставка по Москве и области. Стоимость и сроки согласуются с менеджером.", "category": "Доставка", "sort_order": 15},
     ]
 
     faqs = []
@@ -682,6 +674,90 @@ def create_faqs(db: Session) -> list:
     return faqs
 
 
+def create_notifications(db: Session, users: dict, orders: list) -> list:
+    """Создание уведомлений."""
+    print("\n🔔 Создание уведомлений...")
+
+    manager = users.get("manager1@dental-lab.ru")
+    client_user = users.get("client1@dental-lab.ru")
+    tech_user = users.get("technician1@dental-lab.ru")
+
+    notifications_data = [
+        {"recipient": client_user, "sender": manager, "title": "Заказ подтверждён", "message": "Ваш заказ принят в работу. Менеджер свяжется с вами при необходимости.", "order": orders[0] if orders else None, "is_read": True},
+        {"recipient": client_user, "sender": manager, "title": "Изменение статуса", "message": "Заказ переведён в статус «В работе».", "order": orders[0] if orders else None, "is_read": False},
+        {"recipient": tech_user, "sender": manager, "title": "Новое назначение", "message": "Вам назначен новый заказ. Проверьте дедлайн и материалы.", "order": orders[0] if orders else None, "is_read": False},
+        {"recipient": users.get("client2@dental-lab.ru"), "sender": manager, "title": "Заказ на проверке", "message": "Работа выполнена и ожидает проверки менеджером.", "order": orders[5] if len(orders) > 5 else None, "is_read": False},
+        {"recipient": users.get("client3@dental-lab.ru"), "sender": manager, "title": "Заказ завершён", "message": "Заказ готов к выдаче. Свяжитесь с менеджером для получения.", "order": orders[10] if len(orders) > 10 else None, "is_read": True},
+        {"recipient": users.get("manager2@dental-lab.ru"), "sender": None, "title": "Заявка на материалы", "message": "Техник подал заявку на диоксид циркония. Требуется согласование.", "order": None, "is_read": False},
+        {"recipient": client_user, "sender": manager, "title": "Срок дедлайна", "message": "Напоминаем: до дедлайна по заказу осталось 2 дня.", "order": orders[1] if len(orders) > 1 else None, "is_read": False},
+        {"recipient": users.get("client4@dental-lab.ru"), "sender": manager, "title": "Заказ отменён", "message": "Заказ отменён по запросу клиники.", "order": None, "is_read": True},
+    ]
+
+    notifications = []
+    for item in notifications_data:
+        if not item["recipient"]:
+            continue
+        notification = Notification(
+            recipient_id=item["recipient"].id,
+            sender_id=item["sender"].id if item["sender"] else None,
+            title=item["title"],
+            message=item["message"],
+            notification_type="order_status",
+            order_id=item["order"].id if item["order"] else None,
+            is_read=item["is_read"],
+        )
+        db.add(notification)
+        db.flush()
+        notifications.append(notification)
+        print(f"  ✅ Уведомление: {item['title']} → {item['recipient'].email}")
+
+    db.commit()
+    return notifications
+
+
+def create_order_templates(db: Session, clients: dict, services: dict) -> list:
+    """Создание шаблонов заказов."""
+    print("\n📋 Создание шаблонов заказов...")
+
+    services_dict = services.get("services", {})
+    client_list = list(clients.values())
+    if not client_list:
+        return []
+
+    templates_data = [
+        {"client_idx": 0, "name": "Стандартная коронка", "items": ["Коронка металлокерамическая"], "notes": "Стандартный шаблон для одиночной коронки"},
+        {"client_idx": 0, "name": "Имплант + коронка", "items": ["Абатмент индивидуальный", "Коронка на имплант"], "notes": "Комплект для имплантации"},
+        {"client_idx": 1, "name": "Эстетика — виниры", "items": ["Винир керамический"], "notes": "Для фронтальной группы зубов"},
+        {"client_idx": 2, "name": "Съёмный протез", "items": ["Полный съемный протез"], "notes": "Полный протез на одну челюсть"},
+        {"client_idx": 3, "name": "Ортодонтия — элайнеры", "items": ["Элайнеры (комплект)"], "notes": "Полный комплект элайнеров"},
+    ]
+
+    templates = []
+    for tpl in templates_data:
+        if tpl["client_idx"] >= len(client_list):
+            continue
+        client = client_list[tpl["client_idx"]]
+        items = []
+        for svc_name in tpl["items"]:
+            service = services_dict.get(svc_name)
+            if service:
+                items.append({"service_id": service.id, "service_name": service.name, "quantity": 1})
+
+        template = OrderTemplate(
+            client_id=client.id,
+            name=tpl["name"],
+            items=items,
+            notes=tpl["notes"],
+        )
+        db.add(template)
+        db.flush()
+        templates.append(template)
+        print(f"  ✅ Шаблон: {tpl['name']} ({client.clinic_name})")
+
+    db.commit()
+    return templates
+
+
 def run_seed():
     """Запуск заполнения БД."""
     print("=" * 60)
@@ -689,10 +765,13 @@ def run_seed():
     print("=" * 60)
 
     db = SessionLocal()
-    client_users = []  # Глобальные переменные для статистики
+    client_users = []
     technician_users = []
-    
+
     try:
+        print("\n🗑️  Очистка базы данных перед заполнением...")
+        flush_all_data(db)
+
         users = create_users(db)
         client_users = [users["client1@dental-lab.ru"], users["client2@dental-lab.ru"], users["client3@dental-lab.ru"], users["client4@dental-lab.ru"]]
         technician_users = [users["technician1@dental-lab.ru"], users["technician2@dental-lab.ru"], users["technician3@dental-lab.ru"]]
@@ -707,6 +786,8 @@ def run_seed():
         create_knowledge_base(db, users)
         create_promotions(db)
         create_faqs(db)
+        create_notifications(db, users, orders)
+        create_order_templates(db, clients, services)
 
         print("\n" + "=" * 60)
         print("База данных успешно заполнена!")
@@ -715,6 +796,10 @@ def run_seed():
         print(f"   - Техников: {len(technicians)}")
         print(f"   - Заказов: {len(orders)}")
         print(f"   - Услуг: {len(services['services'])}")
+        print(f"   - Отзывов: {db.query(Review).count()}")
+        print(f"   - Статей: {db.query(Article).count()}")
+        print(f"   - БЗ: {db.query(KnowledgeBase).count()}")
+        print(f"   - FAQ: {db.query(Faq).count()}")
         print("\n=== Распределение заказов по клиентам ===")
         for client_user in client_users:
             client = clients.get(client_user.id)

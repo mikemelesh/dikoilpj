@@ -1,8 +1,10 @@
+import axios from "axios";
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/authStore";
 import { getMe } from "@/api/auth";
 import { getCurrentTechnician } from "@/api/technicians";
+import { showApiError } from "@/lib/apiError";
 
 /**
  * Компонент для синхронизации профиля пользователя.
@@ -19,16 +21,18 @@ export const ProfileSync = () => {
     enabled: isAuthenticated,
     retry: 1,
     staleTime: 5 * 60 * 1000, // 5 минут
+    meta: { skipErrorToast: true },
   });
 
   // Для техников дополнительно загружаем профиль
   const isTechnician = user?.role === "technician";
-  const { data: technicianData } = useQuery({
+  const { data: technicianData, error: technicianError } = useQuery({
     queryKey: ["current-technician-full"],
     queryFn: getCurrentTechnician,
     enabled: isAuthenticated && isTechnician && !!meData,
     retry: 1,
     staleTime: 5 * 60 * 1000, // 5 минут
+    meta: { skipErrorToast: true },
   });
 
   // Обновляем данные пользователя при загрузке (игнорируем устаревший кэш другого пользователя)
@@ -52,14 +56,22 @@ export const ProfileSync = () => {
     });
   }, [meData, technicianData, updateUser]);
 
-  // Обработка ошибки - logout при 401
+  // Обработка ошибки — logout при 401, иначе уведомление
   useEffect(() => {
-    if (meError) {
-      console.error("Ошибка загрузки профиля:", meError);
+    if (!meError) return;
+
+    if (axios.isAxiosError(meError) && meError.response?.status === 401) {
       logout();
       queryClient.clear();
+      return;
     }
-  }, [meError]);
+    showApiError(meError, "Не удалось загрузить профиль");
+  }, [meError, logout, queryClient]);
+
+  useEffect(() => {
+    if (!technicianError) return;
+    showApiError(technicianError, "Не удалось загрузить профиль техника");
+  }, [technicianError]);
 
   return null;
 };

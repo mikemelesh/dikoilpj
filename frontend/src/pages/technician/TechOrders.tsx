@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
@@ -7,46 +7,46 @@ import { SearchAndFilter, type FilterConfig } from "@/components/shared/SearchAn
 import { Pagination } from "@/components/shared/Pagination";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { toExportFilters } from "@/lib/exportFilters";
+import { isOrderUrgent, sortOrders, type OrderSortField } from "@/lib/sortOrders";
 import { Clock } from "lucide-react";
+import { cn, formatDate, formatPrice } from "@/utils";
+import type { Order } from "@/types";
 
 export const TechOrders = () => {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<string>("created_at");
+  const [sortBy, setSortBy] = useState<OrderSortField>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const limit = 10;
+  const limit = 20;
+
+  const toggleSort = (next: OrderSortField) => {
+    if (next === sortBy) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(next);
+      setSortDir("asc");
+    }
+  };
 
   const { data, isLoading } = useQuery({
-    queryKey: ["tech-orders", page, filters, search, sortBy, sortDir],
-    queryFn: () => getTechnicianOrders({
-      page,
-      limit,
-      status: filters.status || undefined,
-      date_from: filters.date_from,
-      date_to: filters.date_to,
-      search: search.trim() || undefined,
-      sort_by: sortBy,
-      sort_dir: sortDir,
-    }),
+    queryKey: ["tech-orders", page, filters, search],
+    queryFn: () =>
+      getTechnicianOrders({
+        page,
+        limit,
+        status: filters.status || undefined,
+        priority: filters.priority,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        search: search.trim() || undefined,
+      }),
   });
 
-  const onChangeSortBy = (value: string) => {
-    setSortBy(value);
-    setPage(1);
-  };
-
-  const toggleSortDir = () => {
-    setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    setPage(1);
-  };
-
-  const exportFilters = useMemo(
-    () => toExportFilters({ filters, search }),
-    [filters, search]
-  );
+  const exportFilters = toExportFilters({ filters, search });
 
   const filterConfigs: FilterConfig[] = [
     {
@@ -62,9 +62,31 @@ export const TechOrders = () => {
         { value: "cancelled", label: "Отменён" },
       ],
     },
+    {
+      key: "priority",
+      label: "Приоритет",
+      type: "select",
+      options: [
+        { value: "critical", label: "Критичный" },
+        { value: "urgent", label: "Срочный" },
+        { value: "normal", label: "Обычный" },
+      ],
+    },
     { key: "date_from", label: "Дата от", type: "date" },
     { key: "date_to", label: "Дата до", type: "date" },
   ];
+
+  const orders = (data?.items ?? []) as Array<
+    Order & {
+      client_name?: string | null;
+      created_at?: string | null;
+      deadline?: string | null;
+      final_price?: number | string | null;
+      priority?: string | null;
+    }
+  >;
+
+  const sortedOrders = sortOrders(orders, sortBy, sortDir);
 
   return (
     <div className="space-y-6">
@@ -80,38 +102,6 @@ export const TechOrders = () => {
         searchPlaceholder="Поиск по номеру заказа или клинике..."
       />
 
-      <Card>
-        <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="text-sm text-muted-foreground">
-            Сортировка
-          </div>
-
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-muted-foreground">Поле</label>
-            <select
-              value={sortBy}
-              onChange={(e) => onChangeSortBy(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="created_at">Создан</option>
-              <option value="deadline">Дедлайн</option>
-              <option value="order_number">Номер</option>
-              <option value="status">Статус</option>
-              <option value="priority">Приоритет</option>
-              <option value="final_price">Сумма</option>
-            </select>
-
-            <button
-              type="button"
-              onClick={toggleSortDir}
-              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
-            >
-              {sortDir === "asc" ? "↑" : "↓"}
-            </button>
-          </div>
-        </CardContent>
-      </Card>
-
       {isLoading ? (
         <div className="space-y-4">
           {[...Array(5)].map((_, i) => (
@@ -122,7 +112,7 @@ export const TechOrders = () => {
             </Card>
           ))}
         </div>
-      ) : !data?.items?.length ? (
+      ) : !orders.length ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <p>Заказы не найдены</p>
@@ -131,34 +121,89 @@ export const TechOrders = () => {
       ) : (
         <>
           <div className="space-y-4">
-            {data.items.map((order: any) => (
-              <Link key={order.id} to={`/technician/orders/${order.id}`}>
-                <Card className="transition-shadow hover:shadow-md cursor-pointer">
-                  <CardContent className="py-4">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <p className="font-medium text-lg">{order.order_number}</p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-3 w-3" />
-                          {order.deadline
-                            ? `Дедлайн: ${new Date(order.deadline).toLocaleDateString("ru-RU")}`
-                            : "Без дедлайна"}
+            <div className="flex flex-wrap gap-3 items-center">
+              <span className="text-sm font-medium text-muted-foreground">Сортировка:</span>
+
+              <Button variant="outline" size="sm" onClick={() => toggleSort("created_at")} className="gap-2">
+                Дата создания{sortBy === "created_at" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => toggleSort("deadline")} className="gap-2">
+                Дедлайн{sortBy === "deadline" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => toggleSort("order_number")} className="gap-2">
+                Номер заказа{sortBy === "order_number" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => toggleSort("final_price")} className="gap-2">
+                Сумма{sortBy === "final_price" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => toggleSort("priority")} className="gap-2">
+                Приоритет{sortBy === "priority" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+            </div>
+
+            {sortedOrders.map((order) => {
+              const urgent = isOrderUrgent(order);
+              const overdue =
+                order.deadline &&
+                new Date(order.deadline) < new Date() &&
+                !["completed", "cancelled", "archived"].includes(order.status);
+
+              return (
+                <Link key={order.id} to={`/technician/orders/${order.id}`}>
+                  <Card
+                    className={cn(
+                      "transition-shadow hover:shadow-md cursor-pointer",
+                      urgent && "border-destructive/60 ring-1 ring-destructive/30",
+                    )}
+                  >
+                    <CardContent className="py-4">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="space-y-1">
+                          <p className="font-medium text-lg">{order.order_number}</p>
+                          {order.client_name && (
+                            <p className="text-sm text-muted-foreground">{order.client_name}</p>
+                          )}
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            {order.deadline
+                              ? `Дедлайн: ${formatDate(order.deadline)}${overdue ? " (просрочен)" : ""}`
+                              : "Без дедлайна"}
+                          </div>
+                          {order.created_at && (
+                            <p className="text-xs text-muted-foreground">
+                              Создан: {formatDate(order.created_at)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <StatusBadge status={order.status} />
+                          <span
+                            className={cn(
+                              "text-sm font-medium",
+                              order.priority === "critical"
+                                ? "text-red-600"
+                                : order.priority === "urgent"
+                                  ? "text-orange-600"
+                                  : "text-muted-foreground",
+                            )}
+                          >
+                            {order.priority === "normal"
+                              ? "Обычный"
+                              : order.priority === "urgent"
+                                ? "Срочный"
+                                : "Критичный"}
+                          </span>
+                          <span className="font-semibold">{formatPrice(Number(order.final_price))}</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <StatusBadge status={order.status} />
-                        <span className={`text-sm font-medium ${order.priority === "critical" ? "text-red-600" : order.priority === "urgent" ? "text-orange-600" : "text-muted-foreground"}`}>
-                          {order.priority === "normal" ? "Обычный" : order.priority === "urgent" ? "Срочный" : "Критичный"}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
 
-          <Pagination total={data.total} page={page} limit={limit} onPageChange={setPage} />
+          <Pagination total={data?.total ?? 0} page={page} limit={limit} onPageChange={setPage} />
         </>
       )}
     </div>

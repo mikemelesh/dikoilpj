@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { Article } from "@/types";
 import { ArrowLeft } from "lucide-react";
 import { toast } from "react-toastify";
+import { showApiError } from "@/lib/apiError";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 
 export const ArticleDetailPage = () => {
@@ -19,7 +20,7 @@ export const ArticleDetailPage = () => {
     if (!slug) return;
     apiClient.get<Article>(`/articles/${slug}`)
       .then((res) => setArticle(res.data))
-      .catch(() => toast.error("Статья не найдена"))
+      .catch((error) => showApiError(error, "Статья не найдена"))
       .finally(() => setIsLoading(false));
   }, [slug]);
 

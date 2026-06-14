@@ -1,117 +1,106 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
-import { getCurrentTechnician, updateTechnicianProfile, getMaterials, createMaterialRequest } from "@/api/technicians";
+import { getCurrentTechnician, updateTechnicianProfile } from "@/api/technicians";
 import { authStore } from "@/stores/authStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FileUpload } from "@/components/shared/FileUpload";
-import { StatusBadge } from "@/components/shared/StatusBadge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, User } from "lucide-react";
+import { User } from "lucide-react";
 
-// Схема профиля
 const profileSchema = z.object({
   specialization: z.string().optional(),
   experience_years: z.coerce.number().min(0).optional(),
   portfolio_description: z.string().max(2000).optional(),
-  is_available: z.boolean().default(true),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
-// Схема заявки на материал
-const materialRequestSchema = z.object({
-  material_id: z.number().min(1, "Выберите материал"),
-  quantity_requested: z.coerce.number().min(0.1, "Минимум 0.1"),
-  comment: z.string().max(500).optional(),
-});
-
-type MaterialRequestData = z.infer<typeof materialRequestSchema>;
-
 export const TechProfile = () => {
-  const { user, updateUser } = authStore();
+  const { user } = authStore();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
-  const [showMaterialModal, setShowMaterialModal] = useState(false);
 
   const { data: technician } = useQuery({
     queryKey: ["current-technician"],
     queryFn: getCurrentTechnician,
   });
 
-  const { data: materials } = useQuery({
-    queryKey: ["materials"],
-    queryFn: getMaterials,
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      specialization: "",
+      experience_years: 0,
+      portfolio_description: "",
+    },
   });
 
+  useEffect(() => {
+    if (!technician) return;
+    reset({
+      specialization: technician.specialization || "",
+      experience_years: technician.experience_years ?? 0,
+      portfolio_description: technician.portfolio_description || "",
+    });
+  }, [technician, reset]);
+
   const updateMutation = useMutation({
-    mutationFn: (data: ProfileFormData) => {
-      // Clean the data to remove empty strings
-      const cleanedData = {
-        first_name: data.first_name || null,
-        last_name: data.last_name || null,
-        phone: data.phone || null,
-      };
-      return apiClient.put("/auth/profile", cleanedData);
-    },
+    mutationFn: (data: ProfileFormData) =>
+      updateTechnicianProfile({
+        specialization: data.specialization?.trim() || undefined,
+        experience_years: data.experience_years,
+        portfolio_description: data.portfolio_description?.trim() || undefined,
+      }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["current-technician"] });
+      queryClient.invalidateQueries({ queryKey: ["current-technician-full"] });
       toast.success("Профиль обновлён");
       setIsEditing(false);
     },
-    onError: (error: any) => {
-      console.error("Profile update error:", error);
-      toast.error(error.response?.data?.detail || "Ошибка обновления");
-    },
-  });
-
-  const createRequestMutation = useMutation({
-    mutationFn: (data: MaterialRequestData) => createMaterialRequest(data),
-    onSuccess: () => {
-      toast.success("Заявка создана");
-      setShowMaterialModal(false);
-      resetRequest();
-    },
-    onError: () => toast.error("Ошибка создания заявки"),
-  });
-
-  const { register, handleSubmit, formState: { errors } } = useForm<ProfileFormData>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      specialization: technician?.specialization || "",
-      experience_years: technician?.experience_years || 0,
-      portfolio_description: technician?.portfolio_description || "",
-      is_available: technician?.is_available ?? true,
-    },
-  });
-
-  const { register: registerRequest, handleSubmit: handleSubmitRequest, reset: resetRequest, formState: { errors: requestErrors } } = useForm<MaterialRequestData>({
-    resolver: zodResolver(materialRequestSchema),
+    onError: mutationOnError("Ошибка обновления профиля"),
   });
 
   const onSubmitProfile = (data: ProfileFormData) => {
     updateMutation.mutate(data);
   };
 
-  const onSubmitRequest = (data: MaterialRequestData) => {
-    createRequestMutation.mutate(data);
+  const handleCancelEdit = () => {
+    if (technician) {
+      reset({
+        specialization: technician.specialization || "",
+        experience_years: technician.experience_years ?? 0,
+        portfolio_description: technician.portfolio_description || "",
+      });
+    }
+    setIsEditing(false);
+  };
+
+  const handleStartEdit = () => {
+    if (technician) {
+      reset({
+        specialization: technician.specialization || "",
+        experience_years: technician.experience_years ?? 0,
+        portfolio_description: technician.portfolio_description || "",
+      });
+    }
+    window.setTimeout(() => setIsEditing(true), 0);
   };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold">Профиль техника</h1>
 
-      {/* Основная информация */}
       <Card>
         <CardHeader>
           <CardTitle>Личная информация</CardTitle>
-          <CardDescription>Ваши контактные данные</CardDescription>
+          <CardDescription>Ваши контактные данные и специализация</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4 mb-4">
@@ -124,13 +113,16 @@ export const TechProfile = () => {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmitProfile)} className="space-y-4">
+          <form
+            onSubmit={handleSubmit(onSubmitProfile, () => toast.error("Проверьте правильность данных"))}
+            className="space-y-4"
+          >
             <div>
               <Label htmlFor="specialization">Специализация</Label>
               <Input
                 id="specialization"
                 {...register("specialization")}
-                disabled={!isEditing}
+                disabled={!isEditing || updateMutation.isPending}
                 placeholder="Например: коронки, мосты"
               />
             </div>
@@ -142,8 +134,11 @@ export const TechProfile = () => {
                 type="number"
                 min="0"
                 {...register("experience_years")}
-                disabled={!isEditing}
+                disabled={!isEditing || updateMutation.isPending}
               />
+              {errors.experience_years && (
+                <p className="text-sm text-destructive">{errors.experience_years.message}</p>
+              )}
             </div>
 
             <div>
@@ -151,33 +146,36 @@ export const TechProfile = () => {
               <textarea
                 id="portfolio_description"
                 {...register("portfolio_description")}
-                disabled={!isEditing}
+                disabled={!isEditing || updateMutation.isPending}
                 className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 placeholder="Расскажите о своих навыках и достижениях..."
               />
+              {errors.portfolio_description && (
+                <p className="text-sm text-destructive">{errors.portfolio_description.message}</p>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_available"
-                {...register("is_available")}
-                disabled={!isEditing}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="is_available">Доступен для новых заказов</Label>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Назначение заказов выполняет менеджер. Статус «в работе» также выставляет менеджер.
+            </p>
 
             <div className="flex gap-4">
               {isEditing ? (
                 <>
-                  <Button type="submit">Сохранить</Button>
-                  <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
+                  <Button type="submit" disabled={updateMutation.isPending}>
+                    {updateMutation.isPending ? "Сохранение..." : "Сохранить"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCancelEdit}
+                    disabled={updateMutation.isPending}
+                  >
                     Отмена
                   </Button>
                 </>
               ) : (
-                <Button type="button" onClick={() => setIsEditing(true)}>
+                <Button type="button" onClick={handleStartEdit}>
                   Редактировать
                 </Button>
               )}
@@ -186,7 +184,6 @@ export const TechProfile = () => {
         </CardContent>
       </Card>
 
-      {/* Аватар */}
       <Card>
         <CardHeader>
           <CardTitle>Аватар</CardTitle>

@@ -42,5 +42,12 @@ class CalculatorResponse(BaseModel):
     subtotal: Decimal
     discount_percent: float = Field(default=0.0, description="Процент скидки")
     discount_amount: Decimal
+    loyalty_discount_percent: float = Field(default=0.0, description="Скидка программы лояльности")
+    promotion_discount_percent: float = Field(default=0.0, description="Макс. скидка по акциям")
+    discount_source: str = Field(
+        default="none",
+        description="Источник скидки: none | loyalty | promotion | combined",
+    )
+    applied_promotion_title: Optional[str] = Field(None, description="Название акции, если она применена")
     active_promotions: List[PromotionInfo]
     final_price: Decimal

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Clock, Package, TrendingUp, Star, AlertCircle, Plus } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { formatDate } from "@/utils";
 
 export const TechDashboard = () => {
   const { user } = useAuthStore();
@@ -145,7 +146,7 @@ export const TechDashboard = () => {
                           <div className="flex items-center gap-2 text-sm">
                             <Clock className={`h-3 w-3 ${new Date(order.deadline!) < new Date() ? "text-red-500" : ""}`} />
                             <span className={new Date(order.deadline!) < new Date() ? "text-red-500 font-medium" : "text-muted-foreground"}>
-                              {new Date(order.deadline!).toLocaleDateString("ru-RU")}
+                              {formatDate(order.deadline!)}
                               {new Date(order.deadline!) < new Date() && " (просрочено)"}
                             </span>
                           </div>
@@ -191,7 +192,7 @@ export const TechDashboard = () => {
                   <div>
                     <p className="font-medium">{req.material?.name || `Материал #${req.material_id}`}</p>
                     <p className="text-sm text-muted-foreground">
-                      {req.quantity_requested} {req.material?.unit || "шт"} • {new Date(req.created_at).toLocaleDateString("ru-RU")}
+                      {req.quantity_requested} {req.material?.unit || "шт"} • {formatDate(req.created_at)}
                     </p>
                   </div>
                   <StatusBadge status={req.status} />

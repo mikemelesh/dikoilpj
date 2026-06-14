@@ -16,13 +16,40 @@ from ..models.user import User, UserRole
 from ..schemas.clients import (
     ClientDetailResponse,
     ClientListResponse,
+    ClientLoyaltyProgress,
+    ClientLoyaltyRecalculateResponse,
+    ClientLoyaltyResponse,
     ClientLoyaltyUpdate,
     ClientOrderSummary,
     ClientSummary,
 )
+from ..utils.loyalty import (
+    get_client_total_spent,
+    get_loyalty_progress,
+    recalculate_all_clients_loyalty,
+    sync_client_loyalty_from_spent,
+)
 from ..utils.security import log_action
 
 router = APIRouter(prefix="/clients", tags=["clients"])
+
+
+def _client_loyalty_fields(db: Session, client: Client, *, sync: bool = True) -> dict:
+    if sync:
+        sync_client_loyalty_from_spent(db, client)
+    total_spent = get_client_total_spent(db, client.id)
+    progress = get_loyalty_progress(total_spent)
+    return {
+        "total_spent": float(total_spent),
+        "loyalty_progress": ClientLoyaltyProgress(**progress),
+    }
+
+
+def _get_client_for_user(db: Session, user: User) -> Client:
+    client = db.query(Client).filter(Client.user_id == user.id).first()
+    if not client:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль клиента не найден")
+    return client
 
 
 @router.get("", response_model=ClientListResponse)
@@ -112,6 +139,7 @@ async def get_clients(
         # Дополнительная защита от None (хотя inner join должен это предотвратить)
         if not client.user:
             continue
+        loyalty = _client_loyalty_fields(db, client)
         items.append(ClientSummary(
             id=client.id,
             user_id=str(client.user.id),
@@ -121,11 +149,14 @@ async def get_clients(
             phone=client.user.phone,
             clinic_name=client.clinic_name,
             total_orders=client.total_orders,
+            total_spent=loyalty["total_spent"],
             loyalty_tier=client.loyalty_tier,
             discount_percent=client.discount_percent,
             loyalty_points=client.user.loyalty_points,
             created_at=client.user.created_at,
         ))
+
+    db.commit()
 
     return ClientListResponse(
         items=items,
@@ -134,6 +165,45 @@ async def get_clients(
         limit=limit,
         pages=pages,
     )
+
+
+@router.get("/me/loyalty", response_model=ClientLoyaltyResponse)
+async def get_my_loyalty(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["client"])),
+):
+    """Текущая программа лояльности для авторизованного клиента."""
+    client = _get_client_for_user(db, current_user)
+    sync_client_loyalty_from_spent(db, client)
+    total_spent = get_client_total_spent(db, client.id)
+    progress = get_loyalty_progress(total_spent)
+    db.commit()
+
+    return ClientLoyaltyResponse(
+        total_spent=float(total_spent),
+        total_orders=client.total_orders,
+        loyalty_tier=client.loyalty_tier,
+        discount_percent=client.discount_percent,
+        progress=ClientLoyaltyProgress(**progress),
+    )
+
+
+@router.post("/loyalty/recalculate", response_model=ClientLoyaltyRecalculateResponse)
+async def recalculate_loyalty_all(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """Пересчитать скидки всех клиентов по завершённым заказам."""
+    count = recalculate_all_clients_loyalty(db)
+    log_action(
+        db=db,
+        user_id=str(current_user.id),
+        action_type="recalculate_loyalty",
+        entity_type="client",
+        entity_id=None,
+        description=f"Пересчитана лояльность для {count} клиентов",
+    )
+    return ClientLoyaltyRecalculateResponse(updated_clients=count)
 
 
 @router.get("/{client_id}", response_model=ClientDetailResponse)
@@ -179,6 +249,9 @@ async def get_client(
         for order in last_orders
     ]
 
+    loyalty = _client_loyalty_fields(db, client)
+    db.commit()
+
     return ClientDetailResponse(
         id=client.id,
         user_id=str(client.user.id),
@@ -189,10 +262,12 @@ async def get_client(
         clinic_name=client.clinic_name,
         address=client.address,
         total_orders=client.total_orders,
+        total_spent=loyalty["total_spent"],
         loyalty_tier=client.loyalty_tier,
         discount_percent=client.discount_percent,
         loyalty_points=client.user.loyalty_points,
         created_at=client.user.created_at,
+        loyalty_progress=loyalty["loyalty_progress"],
         last_orders=last_orders_summary,
     )
 
@@ -268,6 +343,9 @@ async def update_client_loyalty(
         for order in last_orders
     ]
 
+    loyalty = _client_loyalty_fields(db, client, sync=False)
+    db.commit()
+
     return ClientDetailResponse(
         id=client.id,
         user_id=str(client.user.id),
@@ -278,9 +356,11 @@ async def update_client_loyalty(
         clinic_name=client.clinic_name,
         address=client.address,
         total_orders=client.total_orders,
+        total_spent=loyalty["total_spent"],
         loyalty_tier=client.loyalty_tier,
         discount_percent=client.discount_percent,
         loyalty_points=client.user.loyalty_points,
         created_at=client.user.created_at,
+        loyalty_progress=loyalty["loyalty_progress"],
         last_orders=last_orders_summary,
     )

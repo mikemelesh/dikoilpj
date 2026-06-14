@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { apiClient } from "@/api/axios";
+import { PublicHeader } from "@/components/layout/PublicHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Star, Clock, Award, TrendingUp, ChevronRight, Building2, User, LogOut, ChevronDown } from "lucide-react";
+import { Star, Clock, Award, TrendingUp, ChevronRight } from "lucide-react";
 import { toast } from "react-toastify";
-import { cn } from "@/utils";
-import { useAuthStore } from "@/stores/authStore";
+import { showApiError } from "@/lib/apiError";
+import { cn, formatDate } from "@/utils";
 
 // =============================================================================
 // Типы
@@ -23,14 +24,14 @@ interface ServiceCategory {
 
 interface Technician {
   id: number;
-  user?: {
-    first_name?: string;
-    last_name?: string;
-  };
+  first_name?: string;
+  last_name?: string;
   specialization?: string;
   experience_years: number;
   rating: number;
   portfolio_description?: string;
+  completed_orders?: number;
+  is_available?: boolean;
 }
 
 interface Promotion {
@@ -56,44 +57,28 @@ interface Review {
 
 export const HomePage = () => {
   const navigate = useNavigate();
-  const { user, logout, isAuthenticated } = useAuthStore();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const handleLogout = () => {
-    logout();
-    navigate("/");
-    setIsDropdownOpen(false);
-  };
-
-  const handleProfileClick = () => {
-    if (user) {
-      navigate(`/${user.role}/profile`);
-    }
-    setIsDropdownOpen(false);
-  };
-
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [categoriesRes, techniciansRes, promotionsRes, reviewsRes] = await Promise.all([
           apiClient.get<ServiceCategory[]>("/services/categories"),
-          apiClient.get<Technician[]>("/technicians?available_only=false&limit=3"),
-          apiClient.get<Promotion[]>("/promotions"),
+          apiClient.get<{ items: Technician[] }>("/technicians?available_only=false&limit=3"),
+          apiClient.get<{ items: Promotion[] }>("/promotions"),
           apiClient.get<{ items: Review[]; total: number }>("/reviews?limit=5"),
         ]);
 
-        setCategories(categoriesRes.data);
-        setTechnicians(techniciansRes.data);
-        setPromotions(promotionsRes.data);
-        setReviews(reviewsRes.data.items || []);
+        setCategories(Array.isArray(categoriesRes.data) ? categoriesRes.data : []);
+        setTechnicians(techniciansRes.data.items ?? []);
+        setPromotions(promotionsRes.data.items ?? []);
+        setReviews(reviewsRes.data.items ?? []);
       } catch (error) {
-        toast.error("Ошибка загрузки данных");
-        console.error(error);
+        showApiError(error, "Ошибка загрузки данных");
       } finally {
         setIsLoading(false);
       }
@@ -104,67 +89,7 @@ export const HomePage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-6 w-6 text-primary" />
-            <span className="font-semibold">Dental Lab</span>
-          </div>
-          <div className="flex items-center gap-4">
-            {isAuthenticated && user ? (
-              <div className="relative">
-                <button
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center gap-2 rounded-lg hover:bg-accent px-3 py-2 transition-colors"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                    <User className="h-4 w-4 text-primary" />
-                  </div>
-                  <span className="hidden sm:inline-block text-sm font-medium">
-                    {user.first_name || user.last_name || user.email}
-                  </span>
-                  <ChevronDown className={cn("h-4 w-4 transition-transform", isDropdownOpen && "rotate-180")} />
-                </button>
-
-                {isDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setIsDropdownOpen(false)}
-                    />
-                    <div className="absolute right-0 mt-2 w-48 rounded-lg border bg-popover py-1 shadow-lg z-20">
-                      <button
-                        onClick={handleProfileClick}
-                        className="flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-accent transition-colors"
-                      >
-                        <User className="h-4 w-4" />
-                        Профиль
-                      </button>
-                      <button
-                        onClick={handleLogout}
-                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Выйти
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <>
-                <Link to="/login">
-                  <Button variant="outline" size="sm">Войти</Button>
-                </Link>
-                <Link to="/register">
-                  <Button size="sm">Регистрация</Button>
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <PublicHeader />
 
       <main>
         {/* Hero Section */}
@@ -248,17 +173,18 @@ export const HomePage = () => {
             <h2 className="mb-8 text-center text-3xl font-bold">Наши специалисты</h2>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {technicians.map((tech) => (
-                <Card key={tech.id}>
+                <Link key={tech.id} to={`/portfolio/${tech.id}`}>
+                <Card className="transition-shadow hover:shadow-md h-full">
                   <CardHeader>
                     <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                         <span className="text-lg font-semibold text-primary">
-                          {tech.user?.first_name?.[0]}{tech.user?.last_name?.[0]}
+                          {tech.first_name?.[0]}{tech.last_name?.[0]}
                         </span>
                       </div>
                       <div>
                         <CardTitle className="text-lg">
-                          {tech.user?.first_name} {tech.user?.last_name}
+                          {tech.first_name} {tech.last_name}
                         </CardTitle>
                         {tech.specialization && (
                           <CardDescription>{tech.specialization}</CardDescription>
@@ -283,6 +209,7 @@ export const HomePage = () => {
                     )}
                   </CardContent>
                 </Card>
+                </Link>
               ))}
             </div>
             <div className="mt-8 text-center">
@@ -363,7 +290,7 @@ export const HomePage = () => {
                     </CardHeader>
                     <CardContent>
                       <p className="text-sm text-muted-foreground">
-                        Действует до {new Date(promo.end_date).toLocaleDateString('ru-RU')}
+                        Действует до {formatDate(promo.end_date)}
                       </p>
                     </CardContent>
                   </Card>
@@ -396,7 +323,7 @@ export const HomePage = () => {
                         ))}
                       </div>
                       <span className="text-sm text-muted-foreground">
-                        {new Date(review.created_at).toLocaleDateString('ru-RU')}
+                        {formatDate(review.created_at)}
                       </span>
                     </div>
                     {review.text && (

@@ -4,7 +4,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
-import { apiClient } from "@/api/axios";
+import { mutationOnError } from "@/lib/apiError";
+import { updateProfile } from "@/api/auth";
 import { useAuthStore } from "@/stores/authStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,58 +13,75 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Phone, Save, X } from "lucide-react";
 import { PhoneInput } from "@/components/shared/PhoneInput";
+import { normalizeBelarusPhone, validateBelarusPhoneInput } from "@/utils/formatters";
 
 const profileSchema = z.object({
   first_name: z.string().optional(),
   last_name: z.string().optional(),
-  phone: z.string()
-    .regex(/^(\+375\d{9}|(\+375 \(\d{2}\) \d{3}-\d{2}-\d{2})?)$/, "Введите корректный белорусский номер телефона")
-    .optional(),
 });
 
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 export const ManagerProfile = () => {
-  const { user } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [phoneValue, setPhoneValue] = useState(user?.phone || "");
 
+  const defaultValues: ProfileFormData = {
+    first_name: user?.first_name || "",
+    last_name: user?.last_name || "",
+  };
+
   const { register, handleSubmit, reset } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
-    defaultValues: {
-      first_name: user?.first_name || "",
-      last_name: user?.last_name || "",
-      phone: user?.phone || "",
-    },
+    defaultValues,
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: ProfileFormData) => {
-      // Clean the data to remove empty strings
-      const cleanedData = {
-        first_name: data.first_name || null,
-        last_name: data.last_name || null,
-        phone: phoneValue || null,
+      const payload = {
+        first_name: data.first_name?.trim() || null,
+        last_name: data.last_name?.trim() || null,
+        phone: normalizeBelarusPhone(phoneValue),
       };
-      return apiClient.put("/auth/profile", cleanedData);
+      return updateProfile(payload);
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      updateUser({
+        first_name: response.user.first_name,
+        last_name: response.user.last_name,
+        phone: response.user.phone,
+      });
       toast.success("Профиль обновлён");
       setIsEditing(false);
     },
-    onError: (error: any) => {
-      console.error("Profile update error:", error);
-      toast.error(error.response?.data?.detail || "Ошибка обновления");
-    },
+    onError: mutationOnError("Ошибка обновления профиля"),
   });
 
   const onSubmit = (data: ProfileFormData) => {
+    const phoneError = validateBelarusPhoneInput(phoneValue);
+    if (phoneError) {
+      toast.error(phoneError);
+      return;
+    }
     updateMutation.mutate(data);
+  };
+
+  const handleCancelEdit = () => {
+    reset(defaultValues);
+    setPhoneValue(user?.phone || "");
+    setIsEditing(false);
+  };
+
+  const handleStartEdit = () => {
+    reset(defaultValues);
+    setPhoneValue(user?.phone || "");
+    // Defer so the click does not land on the Save button that replaces Edit in the same spot.
+    window.setTimeout(() => setIsEditing(true), 0);
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
           <User className="h-8 w-8 text-primary" />
@@ -74,14 +92,16 @@ export const ManagerProfile = () => {
         </div>
       </div>
 
-      {/* Profile Card */}
       <Card>
         <CardHeader>
           <CardTitle>Личная информация</CardTitle>
           <CardDescription>Обновите ваши личные данные</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form
+            onSubmit={handleSubmit(onSubmit, () => toast.error("Проверьте правильность данных"))}
+            className="space-y-6"
+          >
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="first_name">Имя</Label>
@@ -146,7 +166,8 @@ export const ManagerProfile = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => { reset(); setIsEditing(false); }}
+                    onClick={handleCancelEdit}
+                    disabled={updateMutation.isPending}
                     className="gap-2"
                   >
                     <X className="h-4 w-4" />
@@ -154,7 +175,7 @@ export const ManagerProfile = () => {
                   </Button>
                 </>
               ) : (
-                <Button type="button" onClick={() => setIsEditing(true)} className="gap-2">
+                <Button type="button" onClick={handleStartEdit} className="gap-2">
                   <User className="h-4 w-4" />
                   Редактировать
                 </Button>

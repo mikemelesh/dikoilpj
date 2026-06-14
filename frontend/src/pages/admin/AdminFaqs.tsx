@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 import { apiClient } from "@/api/axios";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -76,7 +77,7 @@ export const AdminFaqs = () => {
       setIsDialogOpen(false);
       reset();
     },
-    onError: () => toast.error("Ошибка создания FAQ"),
+    onError: mutationOnError("Ошибка создания FAQ"),
   });
 
   const updateMutation = useMutation({
@@ -89,7 +90,7 @@ export const AdminFaqs = () => {
       setEditingFaq(null);
       reset();
     },
-    onError: () => toast.error("Ошибка обновления FAQ"),
+    onError: mutationOnError("Ошибка обновления FAQ"),
   });
 
   const deleteMutation = useMutation({
@@ -98,7 +99,7 @@ export const AdminFaqs = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-faqs"] });
       toast.success("FAQ удалён");
     },
-    onError: () => toast.error("Ошибка удаления FAQ"),
+    onError: mutationOnError("Ошибка удаления FAQ"),
   });
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<FaqFormData>({
@@ -149,7 +150,7 @@ export const AdminFaqs = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">FAQ</h1>
         <div className="flex space-x-2">
-          <ExportButton resource="faqs" title="FAQ" />
+          <ExportButton resource="faqs" title="Часто задаваемые вопросы" />
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" /> Добавить</Button>

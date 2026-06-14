@@ -70,6 +70,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: "Сотрудники", path: "/manager/technicians", icon: User },
     { label: "Услуги", path: "/manager/services", icon: Wrench },
     { label: "Акции", path: "/manager/promotions", icon: Tag },
+    { label: "Шаблоны заказов", path: "/manager/templates", icon: FileBox },
     { label: "Материалы", path: "/manager/materials", icon: Box },
     { label: "Профиль", path: "/manager/profile", icon: User },
     { label: "Главная", path: "/", icon: LayoutDashboard },

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { apiClient } from "@/api/axios";
 import type { Service, Article } from "@/types";
 import { toast } from "react-toastify";
+import { showApiError } from "@/lib/apiError";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/utils";
@@ -17,7 +18,7 @@ export const CalculatorPage = () => {
   useEffect(() => {
     apiClient.get<{ items: Service[]; total: number }>("/services?limit=100")
       .then((res) => setServices(res.data.items || []))
-      .catch(() => toast.error("Ошибка загрузки услуг"));
+      .catch((error) => showApiError(error, "Ошибка загрузки услуг"));
 
     apiClient.get<{ items: Article[]; total: number }>("/articles?limit=3")
       .then((res) => setArticles(res.data.items || []))

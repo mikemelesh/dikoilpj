@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { getApiErrorMessage, mutationOnError } from "@/lib/apiError";
+import { ApiErrorAlert } from "@/components/shared/ApiErrorAlert";
 
 import {
   getOrder,
@@ -10,6 +12,7 @@ import {
   assignTechnician,
 } from "@/api/orders";
 import { getTechnicians } from "@/api/manager";
+import { TechnicianSelectOptions } from "@/components/manager/TechnicianSelectOptions";
 import { ManagerConfirmOrderDialog } from "@/components/orders/ManagerConfirmOrderDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,9 +21,15 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { OrderStatusTracker } from "@/components/orders/OrderStatusTracker";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/utils";
+import { cn, formatDate, formatDateTime } from "@/utils";
+import {
+  discountFromFinal,
+  finalFromDiscount,
+  formatOrderMoney,
+  roundMoney,
+} from "@/utils/orderPricing";
 
 export const ManagerOrderDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,10 +40,11 @@ export const ManagerOrderDetail = () => {
   const [discountAmount, setDiscountAmount] = useState("");
   const [selectedTechnician, setSelectedTechnician] = useState<number | "">("");
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, error } = useQuery({
     queryKey: ["order", id],
     queryFn: () => getOrder(id!),
     enabled: !!id,
+    meta: { skipErrorToast: true },
   });
 
   const { data: technicians } = useQuery({
@@ -42,15 +52,35 @@ export const ManagerOrderDetail = () => {
     queryFn: getTechnicians,
   });
 
+  const subtotal = order ? Number(order.total_price) : 0;
+
+  const handleFinalPriceChange = (value: string) => {
+    setFinalPrice(value);
+    const parsed = parseFloat(value);
+    if (!Number.isNaN(parsed)) {
+      setDiscountAmount(String(discountFromFinal(subtotal, parsed)));
+    }
+  };
+
+  const handleDiscountChange = (value: string) => {
+    setDiscountAmount(value);
+    const parsed = parseFloat(value);
+    if (!Number.isNaN(parsed)) {
+      setFinalPrice(String(finalFromDiscount(subtotal, parsed)));
+    }
+  };
+
   const pricingMutation = useMutation({
     mutationFn: () => {
       if (!id) throw new Error("Нет ID заказа");
       const price = parseFloat(finalPrice);
       const discount = parseFloat(discountAmount);
-      if (Number.isNaN(price)) throw new Error("Некорректная сумма");
+      if (Number.isNaN(price) || price < 0) throw new Error("Некорректная итоговая сумма");
+      if (Number.isNaN(discount) || discount < 0) throw new Error("Некорректная скидка");
+      if (discount > subtotal) throw new Error("Скидка не может превышать сумму без скидки");
       return updateOrderPricing(id, {
-        final_price: price,
-        discount_amount: Number.isNaN(discount) ? undefined : discount,
+        final_price: roundMoney(price),
+        discount_amount: roundMoney(discount),
       });
     },
     onSuccess: () => {
@@ -58,16 +88,37 @@ export const ManagerOrderDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
       toast.success("Цена сохранена");
     },
-    onError: () => toast.error("Ошибка сохранения цены"),
+    onError: (err: unknown) => {
+      toast.error(getApiErrorMessage(err, "Ошибка сохранения цены"));
+    },
   });
 
   const assignMutation = useMutation({
     mutationFn: (technicianId: number) => assignTechnician(id!, technicianId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
-      toast.success("Техник назначен");
+      queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-new-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["technicians-all"] });
+      toast.success("Исполнитель назначен, заказ в работе");
+      setSelectedTechnician("");
     },
-    onError: () => toast.error("Ошибка назначения"),
+    onError: mutationOnError("Ошибка назначения"),
+  });
+
+  const startWorkMutation = useMutation({
+    mutationFn: () =>
+      updateOrderStatus(id!, {
+        new_status: "in_progress",
+        comment: "Взято в работу менеджером",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order", id] });
+      queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["technicians-all"] });
+      toast.success("Заказ в работе");
+    },
+    onError: mutationOnError("Ошибка смены статуса"),
   });
 
   const completeMutation = useMutation({
@@ -81,7 +132,7 @@ export const ManagerOrderDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
       toast.success("Заказ завершён");
     },
-    onError: () => toast.error("Ошибка"),
+    onError: mutationOnError("Ошибка"),
   });
 
   useEffect(() => {
@@ -92,9 +143,17 @@ export const ManagerOrderDetail = () => {
   }, [order?.id, order?.final_price, order?.discount_amount]);
 
   if (isLoading) return <div className="p-8 text-center">Загрузка...</div>;
+  if (isError) {
+    return (
+      <div className="p-8 max-w-lg mx-auto">
+        <ApiErrorAlert error={error} fallback="Не удалось загрузить заказ" />
+      </div>
+    );
+  }
   if (!order) return <div className="p-8 text-center">Заказ не найден</div>;
 
   const isNew = order.status === "new";
+  const isConfirmed = order.status === "confirmed";
   const isReview = order.status === "review";
   const isOverdue =
     order.deadline && new Date(order.deadline) < new Date() && !["completed", "cancelled", "archived"].includes(order.status);
@@ -125,6 +184,14 @@ export const ManagerOrderDetail = () => {
           {isNew && (
             <Button onClick={() => setConfirmOpen(true)}>Подтвердить заказ</Button>
           )}
+          {isConfirmed && order.technician_id && (
+            <Button
+              onClick={() => startWorkMutation.mutate()}
+              disabled={startWorkMutation.isPending}
+            >
+              Взять в работу
+            </Button>
+          )}
           {isReview && (
             <Button onClick={() => completeMutation.mutate()} disabled={completeMutation.isPending}>
               Завершить
@@ -146,7 +213,7 @@ export const ManagerOrderDetail = () => {
                 isOverdue ? "font-medium text-destructive" : "text-muted-foreground"
               )}
             >
-              Дедлайн: {new Date(order.deadline).toLocaleDateString("ru-RU")}
+              Дедлайн: {formatDate(order.deadline)}
             </p>
           )}
         </CardContent>
@@ -162,7 +229,7 @@ export const ManagerOrderDetail = () => {
               <div>
                 <Label>Сумма без скидки</Label>
                 <p className="text-lg font-medium">
-                  {formatMoney(order.total_price)}
+                  {formatOrderMoney(subtotal)}
                 </p>
               </div>
               <div>
@@ -170,8 +237,10 @@ export const ManagerOrderDetail = () => {
                 <Input
                   type="number"
                   step="0.01"
+                  min="0"
+                  max={subtotal}
                   value={finalPrice}
-                  onChange={(e) => setFinalPrice(e.target.value)}
+                  onChange={(e) => handleFinalPriceChange(e.target.value)}
                 />
               </div>
               <div>
@@ -179,8 +248,10 @@ export const ManagerOrderDetail = () => {
                 <Input
                   type="number"
                   step="0.01"
+                  min="0"
+                  max={subtotal}
                   value={discountAmount}
-                  onChange={(e) => setDiscountAmount(e.target.value)}
+                  onChange={(e) => handleDiscountChange(e.target.value)}
                 />
               </div>
             </div>
@@ -214,8 +285,8 @@ export const ManagerOrderDetail = () => {
                 <TableRow key={item.id}>
                   <TableCell>{item.service_name ?? `Услуга #${item.service_id}`}</TableCell>
                   <TableCell>{item.quantity}</TableCell>
-                  <TableCell>{formatMoney(item.unit_price)}</TableCell>
-                  <TableCell>{formatMoney(item.total_price)}</TableCell>
+                  <TableCell>{formatOrderMoney(item.unit_price)}</TableCell>
+                  <TableCell>{formatOrderMoney(item.total_price)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -223,7 +294,21 @@ export const ManagerOrderDetail = () => {
         </CardContent>
       </Card>
 
-      {!order.technician_id && order.status !== "cancelled" && (
+      {order.technician_name && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Исполнитель</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="flex items-center gap-2 text-sm">
+              <User className="h-4 w-4 text-muted-foreground" />
+              {order.technician_name}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {!order.technician_id && (order.status === "new" || order.status === "confirmed") && (
         <Card>
           <CardHeader>
             <CardTitle>Назначить техника</CardTitle>
@@ -237,13 +322,7 @@ export const ManagerOrderDetail = () => {
               className="flex h-10 min-w-[240px] rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
               <option value="">Выберите техника</option>
-              {technicians
-                ?.filter((t) => t.is_available)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.first_name} {t.last_name} — {t.specialization || "Универсал"}
-                  </option>
-                ))}
+              <TechnicianSelectOptions technicians={technicians} />
             </select>
             <Button
               disabled={!selectedTechnician || assignMutation.isPending}
@@ -268,7 +347,7 @@ export const ManagerOrderDetail = () => {
                 </p>
                 {h.comment && <p className="mt-1 text-muted-foreground">{h.comment}</p>}
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {new Date(h.created_at).toLocaleString("ru-RU")}
+                  {formatDateTime(h.created_at)}
                 </p>
               </div>
             ))}
@@ -280,19 +359,15 @@ export const ManagerOrderDetail = () => {
         order={order}
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
+        technicians={technicians}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ["order", id] });
           queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["manager-new-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["manager-analytics"] });
+          queryClient.invalidateQueries({ queryKey: ["technicians-all"] });
         }}
       />
     </div>
   );
 };
-
-function formatMoney(value: number | string) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "BYN",
-    minimumFractionDigits: 2,
-  }).format(Number(value));
-}

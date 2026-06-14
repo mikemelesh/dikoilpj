@@ -13,6 +13,34 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 # =============================================================================
 
 
+class ClientLoyaltyProgress(BaseModel):
+    """Прогресс до следующего уровня скидки."""
+    current_discount_percent: float
+    next_discount_percent: Optional[float] = None
+    next_threshold_spent: Optional[float] = None
+    amount_to_next: float = 0.0
+    is_max_tier: bool = False
+
+
+class ClientLoyaltyResponse(BaseModel):
+    """Программа лояльности клиента."""
+    total_spent: float
+    total_orders: int
+    loyalty_tier: str
+    discount_percent: float
+    progress: ClientLoyaltyProgress
+    rules: dict = Field(
+        default_factory=lambda: {
+            "threshold_spent": 10000,
+            "base_discount_percent": 5,
+            "step_spent": 5000,
+            "step_discount_percent": 1,
+            "max_discount_percent": 12,
+            "currency": "BYN",
+        }
+    )
+
+
 class ClientSummary(BaseModel):
     """Краткая информация о клиенте."""
     id: int
@@ -23,6 +51,7 @@ class ClientSummary(BaseModel):
     phone: Optional[str] = None
     clinic_name: Optional[str] = None
     total_orders: int
+    total_spent: float = 0.0
     loyalty_tier: str
     discount_percent: float
     loyalty_points: int
@@ -51,10 +80,12 @@ class ClientDetailResponse(BaseModel):
     clinic_name: Optional[str] = None
     address: Optional[str] = None
     total_orders: int
+    total_spent: float = 0.0
     loyalty_tier: str
     discount_percent: float
     loyalty_points: int
     created_at: datetime
+    loyalty_progress: Optional[ClientLoyaltyProgress] = None
 
     last_orders: List[ClientOrderSummary] = Field(default_factory=list)
 
@@ -69,9 +100,14 @@ class ClientListResponse(BaseModel):
 
 
 class ClientLoyaltyUpdate(BaseModel):
-    """Обновление программы лояльности."""
+    """Ручная корректировка (пересчитывается автоматически при завершении заказов)."""
     discount_percent: Optional[float] = Field(None, ge=0, le=100)
     loyalty_tier: Optional[str] = None
+
+
+class ClientLoyaltyRecalculateResponse(BaseModel):
+    """Результат пересчёта лояльности."""
+    updated_clients: int
 
 
 # =============================================================================
@@ -89,7 +125,18 @@ class TechnicianSummary(BaseModel):
     experience_years: int
     rating: float
     completed_orders: int
+    portfolio_description: Optional[str] = None
     is_available: bool
+    today_load: int = 0
+
+
+class TechnicianListResponse(BaseModel):
+    """Пагинированный список техников."""
+    items: List[TechnicianSummary]
+    total: int
+    page: int
+    limit: int
+    pages: int
 
 
 class TechnicianDetailResponse(BaseModel):
@@ -109,6 +156,7 @@ class TechnicianDetailResponse(BaseModel):
     completed_orders: int
     portfolio_description: Optional[str] = None
     is_available: bool
+    today_load: int = 0
     created_at: datetime
 
 
@@ -140,7 +188,7 @@ class TechnicianStatsResponse(BaseModel):
 
 
 class TechnicianPortfolioResponse(BaseModel):
-    """Портфолио техника."""
+    """Публичное портфолио техника (без финансовых данных)."""
     id: int
     first_name: Optional[str] = None
     last_name: Optional[str] = None
@@ -148,12 +196,23 @@ class TechnicianPortfolioResponse(BaseModel):
     experience_years: int
     rating: float
     completed_orders: int
+    in_progress_orders: int = 0
+    average_completion_days: Optional[float] = None
     portfolio_description: Optional[str] = None
+    is_available: bool = True
     recent_works: List[dict] = Field(default_factory=list)
 
 
 class TechnicianUpdate(BaseModel):
-    """Обновление профиля техника."""
+    """Обновление профиля техника (менеджер/админ)."""
     specialization: Optional[str] = Field(None, max_length=200)
+    experience_years: Optional[int] = Field(None, ge=0)
     portfolio_description: Optional[str] = Field(None, max_length=2000)
     is_available: Optional[bool] = None
+
+
+class TechnicianSelfUpdate(BaseModel):
+    """Обновление своего профиля техником (без управления доступностью)."""
+    specialization: Optional[str] = Field(None, max_length=200)
+    experience_years: Optional[int] = Field(None, ge=0)
+    portfolio_description: Optional[str] = Field(None, max_length=2000)

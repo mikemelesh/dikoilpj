@@ -4,6 +4,7 @@ import { apiClient } from "@/api/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import { toast } from "react-toastify";
+import { showApiError } from "@/lib/apiError";
 
 interface FaqItem {
   id: number;
@@ -20,7 +21,7 @@ export const FaqPage = () => {
       .then((res) => {
         setFaqs(res.data);
       })
-      .catch(() => toast.error("Ошибка загрузки FAQ"));
+      .catch((error) => showApiError(error, "Ошибка загрузки FAQ"));
   }, []);
 
   return (

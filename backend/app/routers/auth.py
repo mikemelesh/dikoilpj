@@ -2,7 +2,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from sqlalchemy.orm import Session, joinedload
 
 from ..config import settings
@@ -16,6 +16,7 @@ from ..dependencies.auth import (
 )
 from ..models.client import Client, ClientType
 from ..models import User, UserRole
+from ..utils.loyalty import build_client_profile_snapshot
 from ..utils.security import get_password_hash, log_action, verify_password
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -27,7 +28,8 @@ class RegisterRequest(BaseModel):
     first_name: str
     last_name: str
     phone: Optional[str] = None
-    client_type: str = Field(..., pattern="^(physical|legal)$")  # physical/legal
+    client_type: str = Field(..., pattern="^(physical|legal)$")
+    clinic_name: Optional[str] = Field(None, max_length=255)
 
     @field_validator("password")
     @classmethod
@@ -42,6 +44,12 @@ class RegisterRequest(BaseModel):
         if v not in ["physical", "legal"]:
             raise ValueError("client_type должен быть 'physical' или 'legal'")
         return v
+
+    @model_validator(mode="after")
+    def validate_legal_clinic_name(self) -> "RegisterRequest":
+        if self.client_type == "legal" and not (self.clinic_name and self.clinic_name.strip()):
+            raise ValueError("Для юр. лица укажите название клиники")
+        return self
 
 
 class LoginRequest(BaseModel):
@@ -65,6 +73,14 @@ class UpdateProfileRequest(BaseModel):
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
+    clinic_name: Optional[str] = Field(None, max_length=255)
+    address: Optional[str] = Field(None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_legal_fields(self) -> "UpdateProfileRequest":
+        if self.clinic_name is not None and not self.clinic_name.strip():
+            raise ValueError("Название клиники не может быть пустым")
+        return self
 
 
 class TokenResponse(BaseModel):
@@ -81,6 +97,12 @@ class RefreshRequest(BaseModel):
 
 
 class MeResponse(BaseModel):
+    user: UserInfo
+    client_profile: Optional[dict] = None
+    technician_profile: Optional[dict] = None
+
+
+class ProfileUpdateResponse(BaseModel):
     user: UserInfo
     client_profile: Optional[dict] = None
     technician_profile: Optional[dict] = None
@@ -118,14 +140,16 @@ async def register(
         # Всегда создаем клиентский профиль с типом
         client = Client(
             user_id=user.id,
-            client_type=payload.client_type
+            client_type=payload.client_type,
+            clinic_name=payload.clinic_name.strip() if payload.client_type == "legal" and payload.clinic_name else None,
         )
         db.add(client)
         db.commit()
         db.refresh(user)
-        
+        db.refresh(client)
+
+        client_profile = build_client_profile_snapshot(db, client)
         db.commit()
-        db.refresh(user)
 
         access_token = create_access_token({"sub": str(user.id)})
         refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -150,7 +174,8 @@ async def register(
                 last_name=user.last_name,
                 phone=user.phone,
                 role=user.role.value,
-            )
+            ),
+            client_profile=client_profile,
         )
     finally:
         db.close()
@@ -201,14 +226,8 @@ async def login(
         if user.role == UserRole.CLIENT:
             client = db.query(Client).filter(Client.user_id == user.id).first()
             if client:
-                client_profile = {
-                    "id": client.id,
-                    "clinic_name": client.clinic_name,
-                    "address": client.address,
-                    "discount_percent": client.discount_percent,
-                    "loyalty_tier": client.loyalty_tier,
-                    "total_orders": client.total_orders,
-                }
+                client_profile = build_client_profile_snapshot(db, client)
+                db.commit()
         elif user.role == UserRole.TECHNICIAN:
             from ..models.technician import Technician
             technician = db.query(Technician).filter(Technician.user_id == user.id).first()
@@ -325,14 +344,8 @@ async def get_me(
         if current_user.role == UserRole.CLIENT:
             client = db.query(Client).filter(Client.user_id == current_user.id).first()
             if client:
-                client_profile = {
-                    "id": client.id,
-                    "clinic_name": client.clinic_name,
-                    "address": client.address,
-                    "discount_percent": client.discount_percent,
-                    "loyalty_tier": client.loyalty_tier,
-                    "total_orders": client.total_orders,
-                }
+                client_profile = build_client_profile_snapshot(db, client)
+                db.commit()
 
         # Для техника
         if current_user.role == UserRole.TECHNICIAN:
@@ -363,7 +376,7 @@ async def get_me(
         db.close()
 
 
-@router.put("/profile", response_model=UserInfo)
+@router.put("/profile", response_model=ProfileUpdateResponse)
 async def update_profile(
     profile_data: UpdateProfileRequest,
     current_user: User = Depends(get_current_active_user),
@@ -373,22 +386,48 @@ async def update_profile(
     Обновить профиль пользователя.
     Доступно: любому аутентифицированному пользователю (свой профиль).
     """
-    # Получаем пользователя из базы данных с использованием переданной сессии
     db_user = db.query(User).filter(User.id == current_user.id).first()
     if not db_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
-    
-    # Обновляем только разрешенные поля если они предоставлены
+
     if profile_data.first_name is not None:
         db_user.first_name = profile_data.first_name
     if profile_data.last_name is not None:
         db_user.last_name = profile_data.last_name
     if profile_data.phone is not None:
         db_user.phone = profile_data.phone
-    
+
+    client_profile = None
+    if db_user.role == UserRole.CLIENT:
+        client = db.query(Client).filter(Client.user_id == db_user.id).first()
+        if not client:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Профиль клиента не найден")
+
+        client_type = (
+            client.client_type.value
+            if hasattr(client.client_type, "value")
+            else client.client_type
+        )
+
+        if client_type == ClientType.legal.value:
+            if profile_data.clinic_name is not None:
+                client.clinic_name = profile_data.clinic_name.strip()
+            if profile_data.address is not None:
+                client.address = profile_data.address.strip() or None
+            if not client.clinic_name:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Для юр. лица укажите название клиники",
+                )
+        elif profile_data.address is not None:
+            client.address = profile_data.address.strip() or None
+
+        db.add(client)
+        client_profile = build_client_profile_snapshot(db, client)
+
     db.commit()
     db.refresh(db_user)
-    
+
     log_action(
         db,
         user_id=str(current_user.id),
@@ -396,14 +435,16 @@ async def update_profile(
         entity_type="user",
         entity_id=str(current_user.id),
         description="Обновление профиля пользователя",
-        # We can't access the request object here directly, so we skip logging IP/email
     )
-    
-    return UserInfo(
-        id=str(current_user.id),
-        email=current_user.email,
-        first_name=current_user.first_name,
-        last_name=current_user.last_name,
-        phone=current_user.phone,
-        role=current_user.role.value,
+
+    return ProfileUpdateResponse(
+        user=UserInfo(
+            id=str(db_user.id),
+            email=db_user.email,
+            first_name=db_user.first_name,
+            last_name=db_user.last_name,
+            phone=db_user.phone,
+            role=db_user.role.value,
+        ),
+        client_profile=client_profile,
     )

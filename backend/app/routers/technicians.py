@@ -16,14 +16,68 @@ from ..models.technician import Technician
 from ..models.user import User, UserRole
 from ..schemas.clients import (
     TechnicianDetailResponse,
+    TechnicianListResponse,
     TechnicianPortfolioResponse,
     TechnicianStatsResponse,
+    TechnicianSelfUpdate,
     TechnicianSummary,
     TechnicianUpdate,
 )
 from ..utils.security import log_action
+from ..utils.technician_load import count_technician_active_orders, get_technician_load_map
 
 router = APIRouter(prefix="/technicians", tags=["technicians"])
+
+
+def _technician_summary(tech: Technician, today_load: int = 0) -> TechnicianSummary:
+    return TechnicianSummary(
+        id=tech.id,
+        user_id=str(tech.user.id),
+        first_name=tech.user.first_name,
+        last_name=tech.user.last_name,
+        specialization=tech.specialization,
+        experience_years=tech.experience_years,
+        rating=tech.rating,
+        completed_orders=tech.completed_orders,
+        portfolio_description=tech.portfolio_description,
+        is_available=tech.is_available,
+        today_load=today_load,
+    )
+
+
+def _technician_order_stats(db: Session, technician_id: int) -> dict:
+    total_orders = db.query(func.count(Order.id)).filter(
+        Order.technician_id == technician_id
+    ).scalar() or 0
+
+    completed_orders = db.query(func.count(Order.id)).filter(
+        Order.technician_id == technician_id,
+        Order.status == OrderStatus.COMPLETED,
+    ).scalar() or 0
+
+    in_progress_orders = db.query(func.count(Order.id)).filter(
+        Order.technician_id == technician_id,
+        Order.status == OrderStatus.IN_PROGRESS,
+    ).scalar() or 0
+
+    avg_completion = db.query(
+        func.avg(
+            func.extract("epoch", Order.completed_at)
+            - func.extract("epoch", Order.created_at)
+        )
+        / 86400
+    ).filter(
+        Order.technician_id == technician_id,
+        Order.status == OrderStatus.COMPLETED,
+        Order.completed_at.isnot(None),
+    ).scalar()
+
+    return {
+        "total_orders": int(total_orders),
+        "completed_orders": int(completed_orders),
+        "in_progress_orders": int(in_progress_orders),
+        "average_completion_days": float(avg_completion) if avg_completion is not None else None,
+    }
 
 
 # =============================================================================
@@ -31,42 +85,57 @@ router = APIRouter(prefix="/technicians", tags=["technicians"])
 # =============================================================================
 # ВАЖНО: /me маршруты должны быть ДО /{technician_id} маршрутов!
 
-@router.get("", response_model=list[TechnicianSummary])
+@router.get("", response_model=TechnicianListResponse)
 async def get_technicians(
-    available_only: bool = Query(True, description="Только доступные техники"),
+    available_only: bool = Query(False, description="Только доступные техники"),
+    search: Optional[str] = Query(None, min_length=1),
+    specialization: Optional[str] = Query(None, min_length=1),
+    page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     """
-    Получить список всех техников.
-    Публичный endpoint (для HomePage).
+    Получить список техников (публичный endpoint для портфолио и главной).
     """
-    from ..models.user import User
-    from sqlalchemy.orm import joinedload
-    
     query = db.query(Technician).options(joinedload(Technician.user))
 
     if available_only:
         query = query.filter(Technician.is_available == True)
 
-    technicians = query.order_by(Technician.rating.desc()).limit(limit).all()
+    if specialization and specialization.strip():
+        pattern = f"%{specialization.strip()}%"
+        query = query.filter(Technician.specialization.ilike(pattern))
 
-    items = [
-        TechnicianSummary(
-            id=tech.id,
-            user_id=str(tech.user.id),
-            first_name=tech.user.first_name,
-            last_name=tech.user.last_name,
-            specialization=tech.specialization,
-            experience_years=tech.experience_years,
-            rating=tech.rating,
-            completed_orders=tech.completed_orders,
-            is_available=tech.is_available,
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        query = query.join(Technician.user).filter(
+            or_(
+                User.first_name.ilike(pattern),
+                User.last_name.ilike(pattern),
+                Technician.specialization.ilike(pattern),
+            )
         )
-        for tech in technicians
-    ]
 
-    return items
+    total = query.count()
+    offset = (page - 1) * limit
+    technicians = (
+        query.order_by(Technician.rating.desc(), Technician.completed_orders.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    pages = (total + limit - 1) // limit if total > 0 else 0
+
+    load_map = get_technician_load_map(db, [t.id for t in technicians])
+
+    return TechnicianListResponse(
+        items=[_technician_summary(tech, load_map.get(tech.id, 0)) for tech in technicians],
+        total=total,
+        page=page,
+        limit=limit,
+        pages=pages,
+    )
 
 
 @router.get("/me", response_model=TechnicianDetailResponse)
@@ -198,6 +267,7 @@ async def get_current_technician_stats(
 @router.get("/me/orders")
 async def get_current_technician_orders(
     status_filter: Optional[list[str]] = Query(None, alias="status"),
+    priority: Optional[str] = Query(None),
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     search: Optional[str] = Query(None, min_length=1),
@@ -234,6 +304,17 @@ async def get_current_technician_orders(
 
     if status_filter:
         query = query.filter(Order.status.in_(status_filter))
+
+    if priority:
+        valid_priorities = ["normal", "urgent", "critical"]
+        if priority not in valid_priorities:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Недопустимый приоритет. Допустимые: {', '.join(valid_priorities)}",
+            )
+        from ..models.order import OrderPriority
+
+        query = query.filter(Order.priority == OrderPriority(priority))
 
     if date_from:
         query = query.filter(Order.created_at >= datetime.combine(date_from, time.min))
@@ -298,7 +379,9 @@ async def get_current_technician_orders(
         else:
             query = query.order_by(sort_col.asc().nullslast() if hasattr(sort_col, "nullslast") else sort_col.asc())
     else:
-        query = query.order_by(Order.created_at.desc())
+        from ..utils.order_sort import orders_list_order_by
+
+        query = orders_list_order_by(query)
 
     total = query.count()
     offset = (page - 1) * limit
@@ -342,7 +425,7 @@ async def get_current_technician_orders(
 
 @router.put("/me/profile", response_model=TechnicianDetailResponse)
 async def update_technician_profile(
-    profile_data: TechnicianUpdate,
+    profile_data: TechnicianSelfUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles(["technician"])),
 ):
@@ -420,6 +503,8 @@ async def get_technician(
             detail="Техник не найден"
         )
 
+    today_load = count_technician_active_orders(db, technician.id)
+
     return TechnicianDetailResponse(
         id=technician.id,
         user_id=str(technician.user.id),
@@ -434,6 +519,7 @@ async def get_technician(
         completed_orders=technician.completed_orders,
         portfolio_description=technician.portfolio_description,
         is_available=technician.is_available,
+        today_load=today_load,
         created_at=technician.user.created_at,
         updated_at=technician.user.updated_at,
     )
@@ -598,8 +684,7 @@ async def get_technician_portfolio(
     db: Session = Depends(get_db),
 ):
     """
-    Получить портфолио техника.
-    Публичный эндпоинт.
+    Получить публичное портфолио техника (без финансовых данных).
     """
     technician = db.query(Technician).options(
         joinedload(Technician.user)
@@ -611,21 +696,36 @@ async def get_technician_portfolio(
             detail="Техник не найден"
         )
 
-    # Последние выполненные работы (5 заказов)
-    recent_works = db.query(Order).filter(
-        Order.technician_id == technician_id,
-        Order.status == OrderStatus.COMPLETED
-    ).order_by(Order.completed_at.desc()).limit(5).all()
+    stats = _technician_order_stats(db, technician_id)
 
-    recent_works_data = [
-        {
-            "order_number": order.order_number,
-            "completed_at": order.completed_at.isoformat() if order.completed_at else None,
-            "final_price": float(order.final_price),
-            "items_count": len(order.items),
-        }
-        for order in recent_works
-    ]
+    recent_works = (
+        db.query(Order)
+        .options(joinedload(Order.items))
+        .filter(
+            Order.technician_id == technician_id,
+            Order.status == OrderStatus.COMPLETED,
+        )
+        .order_by(Order.completed_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    recent_works_data = []
+    for order in recent_works:
+        completion_days = None
+        if order.completed_at and order.created_at:
+            completion_days = round(
+                (order.completed_at - order.created_at).total_seconds() / 86400,
+                1,
+            )
+        recent_works_data.append(
+            {
+                "order_number": order.order_number,
+                "completed_at": order.completed_at.isoformat() if order.completed_at else None,
+                "items_count": len(order.items),
+                "completion_days": completion_days,
+            }
+        )
 
     return TechnicianPortfolioResponse(
         id=technician.id,
@@ -634,7 +734,10 @@ async def get_technician_portfolio(
         specialization=technician.specialization,
         experience_years=technician.experience_years,
         rating=technician.rating,
-        completed_orders=technician.completed_orders,
+        completed_orders=stats["completed_orders"] or technician.completed_orders,
+        in_progress_orders=stats["in_progress_orders"],
+        average_completion_days=stats["average_completion_days"],
         portfolio_description=technician.portfolio_description,
+        is_available=technician.is_available,
         recent_works=recent_works_data,
     )

@@ -43,6 +43,14 @@ class ServiceCategoryResponse(ServiceCategoryBase):
     services_count: int = Field(default=0, description="Количество услуг в категории")
 
 
+class ServiceCategoryBrief(BaseModel):
+    """Краткая категория для вложения в услугу."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
 # === Услуги ===
 
 
@@ -79,6 +87,7 @@ class ServiceResponse(ServiceBase):
     id: int
     category_id: int
     category_name: Optional[str] = None
+    category: Optional[ServiceCategoryBrief] = None
     created_at: datetime
     updated_at: datetime
 

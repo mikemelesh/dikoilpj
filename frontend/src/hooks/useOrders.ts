@@ -1,7 +1,10 @@
-import { useOrders as useOrdersQuery } from "@/api/orders";
+import { useQuery } from "@tanstack/react-query";
 
-export const useOrders = () => {
-  const query = useOrdersQuery();
-  return query;
+import { getOrders, type GetOrdersParams } from "@/api/orders";
+
+export const useOrders = (params?: GetOrdersParams) => {
+  return useQuery({
+    queryKey: ["orders", params],
+    queryFn: () => getOrders(params),
+  });
 };
-

@@ -23,6 +23,14 @@ export interface UpdateClientLoyaltyData {
   loyalty_tier?: string;
 }
 
+interface TechnicianListResponse {
+  items: Technician[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
 export interface AssignTechnicianData {
   technician_id: number;
 }
@@ -94,8 +102,8 @@ export const updateClientLoyalty = async (clientId: number, data: UpdateClientLo
  * Получение списка техников
  */
 export const getTechnicians = async (): Promise<Technician[]> => {
-  const response = await apiClient.get<Technician[]>("/technicians");
-  return response.data;
+  const response = await apiClient.get<TechnicianListResponse>("/technicians?limit=100");
+  return response.data.items;
 };
 
 /**
@@ -148,7 +156,7 @@ export const deleteService = async (id: number): Promise<void> => {
  * Получение списка категорий услуг
  */
 export const getServiceCategories = async (): Promise<ServiceCategory[]> => {
-  const response = await apiClient.get<ServiceCategory[]>('/services/categories');
+  const response = await apiClient.get<ServiceCategory[]>("/services/categories?active_only=true");
   return response.data;
 };
 

@@ -1,96 +1,177 @@
 """
-Утилиты для расчётов и программы лояльности.
+Программа лояльности: скидка от суммы завершённых заказов (BYN).
+
+- от 10 000 BYN: 5%
+- +1% за каждые 5 000 BYN сверх порога
+- максимум 12%
 """
 from decimal import Decimal
 from typing import Tuple
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..models.client import Client, LoyaltyTier
+from ..models.client import Client
+from ..models.order import Order, OrderStatus
+from ..models.user import LoyaltyTier
+
+LOYALTY_SPEND_THRESHOLD = Decimal("10000")
+LOYALTY_SPEND_STEP = Decimal("5000")
+LOYALTY_BASE_DISCOUNT = 5
+LOYALTY_MAX_DISCOUNT = 12
 
 
-# Пороги для уровней лояльности (баллы)
-LOYALTY_THRESHOLDS = {
-    LoyaltyTier.BRONZE: 0,
-    LoyaltyTier.SILVER: 500,
-    LoyaltyTier.GOLD: 2000,
-    LoyaltyTier.PLATINUM: 5000,
-}
-
-# Процент начисления баллов от суммы заказа
-LOYALTY_POINTS_PERCENT = {
-    LoyaltyTier.BRONZE: Decimal("1.0"),  # 1%
-    LoyaltyTier.SILVER: Decimal("1.5"),  # 1.5%
-    LoyaltyTier.GOLD: Decimal("2.0"),    # 2%
-    LoyaltyTier.PLATINUM: Decimal("3.0"), # 3%
-}
+def calculate_discount_from_spent(total_spent: Decimal) -> float:
+    """Процент скидки по накопленной сумме завершённых заказов."""
+    spent = Decimal(str(total_spent or 0))
+    if spent < LOYALTY_SPEND_THRESHOLD:
+        return 0.0
+    extra_steps = int((spent - LOYALTY_SPEND_THRESHOLD) // LOYALTY_SPEND_STEP)
+    return float(min(LOYALTY_MAX_DISCOUNT, LOYALTY_BASE_DISCOUNT + extra_steps))
 
 
-def calculate_loyalty_tier(total_orders: int, loyalty_points: int) -> LoyaltyTier:
-    """
-    Расчёт уровня лояльности на основе накопленных баллов.
-    """
-    if loyalty_points >= LOYALTY_THRESHOLDS[LoyaltyTier.PLATINUM]:
+def calculate_loyalty_tier_from_spent(total_spent: Decimal) -> LoyaltyTier:
+    """Уровень лояльности для отображения (по сумме трат)."""
+    discount = calculate_discount_from_spent(total_spent)
+    if discount >= 10:
         return LoyaltyTier.PLATINUM
-    elif loyalty_points >= LOYALTY_THRESHOLDS[LoyaltyTier.GOLD]:
+    if discount >= 7:
         return LoyaltyTier.GOLD
-    elif loyalty_points >= LOYALTY_THRESHOLDS[LoyaltyTier.SILVER]:
+    if discount >= 5:
         return LoyaltyTier.SILVER
-    else:
-        return LoyaltyTier.BRONZE
+    return LoyaltyTier.BRONZE
 
 
-def calculate_loyalty_points(amount: Decimal, tier: LoyaltyTier) -> int:
-    """
-    Расчёт баллов для начисления по сумме заказа.
-    """
-    points_percent = LOYALTY_POINTS_PERCENT.get(tier, Decimal("1.0"))
-    return int(amount * points_percent / Decimal("100"))
+def get_client_total_spent(db: Session, client_id: int) -> Decimal:
+    """Сумма final_price по завершённым заказам клиента."""
+    total = (
+        db.query(func.coalesce(func.sum(Order.final_price), 0))
+        .filter(
+            Order.client_id == client_id,
+            Order.status == OrderStatus.COMPLETED,
+        )
+        .scalar()
+    )
+    return Decimal(str(total or 0))
+
+
+def get_loyalty_progress(total_spent: Decimal) -> dict:
+    """Пороги для UI: текущая скидка и следующий уровень."""
+    spent = Decimal(str(total_spent or 0))
+    current_discount = calculate_discount_from_spent(spent)
+
+    if spent < LOYALTY_SPEND_THRESHOLD:
+        return {
+            "current_discount_percent": current_discount,
+            "next_discount_percent": float(LOYALTY_BASE_DISCOUNT),
+            "next_threshold_spent": float(LOYALTY_SPEND_THRESHOLD),
+            "amount_to_next": float(LOYALTY_SPEND_THRESHOLD - spent),
+            "is_max_tier": False,
+        }
+
+    if current_discount >= LOYALTY_MAX_DISCOUNT:
+        return {
+            "current_discount_percent": current_discount,
+            "next_discount_percent": None,
+            "next_threshold_spent": None,
+            "amount_to_next": 0.0,
+            "is_max_tier": True,
+        }
+
+    next_discount = current_discount + 1
+    steps_for_next = int(next_discount - LOYALTY_BASE_DISCOUNT)
+    next_threshold = LOYALTY_SPEND_THRESHOLD + LOYALTY_SPEND_STEP * steps_for_next
+
+    return {
+        "current_discount_percent": current_discount,
+        "next_discount_percent": float(next_discount),
+        "next_threshold_spent": float(next_threshold),
+        "amount_to_next": float(max(Decimal("0"), next_threshold - spent)),
+        "is_max_tier": False,
+    }
+
+
+def sync_client_loyalty_from_spent(db: Session, client: Client) -> Client:
+    """Пересчитать скидку и уровень по завершённым заказам."""
+    total_spent = get_client_total_spent(db, client.id)
+    client.discount_percent = calculate_discount_from_spent(total_spent)
+    client.loyalty_tier = calculate_loyalty_tier_from_spent(total_spent).value
+    db.add(client)
+    return client
 
 
 def apply_client_discount(
     total_price: Decimal,
-    client: Client
+    client: Client,
+    db: Session,
 ) -> Tuple[Decimal, Decimal, Decimal]:
     """
-    Применение скидки клиента.
-    
+    Применить скидку лояльности к сумме заказа.
+
     Возвращает: (discount_amount, final_price, total_price)
     """
+    sync_client_loyalty_from_spent(db, client)
     discount_percent = Decimal(str(client.discount_percent or 0.0))
     discount_amount = total_price * discount_percent / Decimal("100")
     final_price = total_price - discount_amount
-    
     return discount_amount, final_price, total_price
 
 
 def update_client_loyalty(
     db: Session,
     client: Client,
-    order_amount: Decimal
+    _order_amount: Decimal,
 ) -> Client:
     """
-    Обновление программы лояльности клиента после завершения заказа.
-    
-    - Увеличивает total_orders
-    - Начисляет loyalty_points
-    - Пересчитывает loyalty_tier
+    Обновление лояльности после завершения заказа.
+    Расчёт по сумме всех заказов со статусом completed.
     """
-    # Увеличиваем счётчик заказов
-    client.total_orders += 1
-    
-    # Начисляем баллы
-    points_to_add = calculate_loyalty_points(order_amount, LoyaltyTier(client.loyalty_tier))
-    client.user.loyalty_points += points_to_add
-    
-    # Пересчитываем уровень
-    new_tier = calculate_loyalty_tier(
-        client.total_orders,
-        client.user.loyalty_points
+    db.flush()
+    client.total_orders = (
+        db.query(func.count(Order.id))
+        .filter(
+            Order.client_id == client.id,
+            Order.status == OrderStatus.COMPLETED,
+        )
+        .scalar()
+        or 0
     )
-    client.loyalty_tier = new_tier.value
-    
-    db.add(client)
-    db.add(client.user)
-    
+    sync_client_loyalty_from_spent(db, client)
     return client
+
+
+def build_client_profile_snapshot(db: Session, client: Client) -> dict:
+    """Данные лояльности для auth/me и client_profile."""
+    sync_client_loyalty_from_spent(db, client)
+    total_spent = get_client_total_spent(db, client.id)
+    progress = get_loyalty_progress(total_spent)
+    return {
+        "id": client.id,
+        "client_type": client.client_type.value if hasattr(client.client_type, "value") else client.client_type,
+        "clinic_name": client.clinic_name,
+        "address": client.address,
+        "discount_percent": client.discount_percent,
+        "loyalty_tier": client.loyalty_tier,
+        "total_orders": client.total_orders,
+        "total_spent": float(total_spent),
+        "loyalty_progress": progress,
+    }
+
+
+def recalculate_all_clients_loyalty(db: Session) -> int:
+    """Пересчитать лояльность для всех клиентов (после миграции / импорта)."""
+    clients = db.query(Client).all()
+    for client in clients:
+        sync_client_loyalty_from_spent(db, client)
+        client.total_orders = (
+            db.query(func.count(Order.id))
+            .filter(
+                Order.client_id == client.id,
+                Order.status == OrderStatus.COMPLETED,
+            )
+            .scalar()
+            or 0
+        )
+        db.add(client)
+    db.commit()
+    return len(clients)

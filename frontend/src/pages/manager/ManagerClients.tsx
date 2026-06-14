@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
 import { getClients, updateClientLoyalty } from "@/api/manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ExportButton } from "@/components/shared/ExportButton";
 import { SearchAndFilter, type FilterConfig } from "@/components/shared/SearchAndFilter";
 import { toExportFilters } from "@/lib/exportFilters";
+import { formatDate, formatPrice } from "@/utils";
+import { LOYALTY_RULES } from "@/utils/loyalty";
 
 const TIER_COLORS: Record<string, string> = {
   bronze: "bg-amber-700", silver: "bg-gray-400", gold: "bg-yellow-500", platinum: "bg-blue-400",
@@ -51,7 +54,7 @@ export const ManagerClients = () => {
       toast.success("Данные обновлены");
       setEditModal({ clientId: 0, open: false, discount: 0, tier: "bronze" });
     },
-    onError: () => toast.error("Ошибка обновления"),
+    onError: mutationOnError("Ошибка обновления"),
   });
 
   const handleSave = () => {
@@ -112,6 +115,7 @@ export const ManagerClients = () => {
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("total_orders")}>
                       Заказов{sortBy === "total_orders" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
                     </TableHead>
+                    <TableHead>Потрачено</TableHead>
                     <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("loyalty_tier")}>
                       Лояльность{sortBy === "loyalty_tier" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
                     </TableHead>
@@ -135,9 +139,10 @@ export const ManagerClients = () => {
                       </TableCell>
                       <TableCell>{client.clinic_name || "—"}</TableCell>
                       <TableCell>{client.total_orders}</TableCell>
+                      <TableCell>{formatPrice(client.total_spent ?? 0)}</TableCell>
                       <TableCell><Badge className={TIER_COLORS[client.loyalty_tier] || "bg-muted"}>{client.loyalty_tier}</Badge></TableCell>
                       <TableCell>{client.discount_percent}%</TableCell>
-                      <TableCell>{client.created_at ? new Date(client.created_at).toLocaleDateString("ru-RU") : "—"}</TableCell>
+                      <TableCell>{client.created_at ? formatDate(client.created_at) : "—"}</TableCell>
                       <TableCell>
                         <Button variant="outline" size="sm" onClick={() => setEditModal({ clientId: client.id, open: true, discount: client.discount_percent, tier: client.loyalty_tier })}>Изменить</Button>
                       </TableCell>
@@ -163,6 +168,12 @@ export const ManagerClients = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-background rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Редактировать клиента</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              Обычно скидка считается автоматически: от {formatPrice(LOYALTY_RULES.thresholdSpent)} —{" "}
+              {LOYALTY_RULES.baseDiscountPercent}%, +{LOYALTY_RULES.stepDiscountPercent}% за каждые{" "}
+              {formatPrice(LOYALTY_RULES.stepSpent)} (макс. {LOYALTY_RULES.maxDiscountPercent}%). Ручное значение
+              сохранится до следующего завершённого заказа.
+            </p>
             <div className="space-y-4">
               <div>
                 <Label>Скидка (%)</Label>

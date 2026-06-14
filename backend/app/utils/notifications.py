@@ -66,3 +66,35 @@ def create_order_status_notification(
     db.flush()
     trim_user_notifications(db, recipient_id)
     return notification
+
+
+def create_review_declined_notification(
+    db: Session,
+    *,
+    recipient_id: str,
+    order_id: Optional[str] = None,
+    order_number: Optional[str] = None,
+    sender_id: Optional[str] = None,
+) -> Notification:
+    """Notify client that their review was declined during moderation."""
+    if order_number:
+        message = (
+            f"Ваш отзыв по заказу {order_number} не прошёл модерацию "
+            "и не будет опубликован."
+        )
+    else:
+        message = "Ваш отзыв не прошёл модерацию и не будет опубликован."
+
+    notification = Notification(
+        recipient_id=recipient_id,
+        sender_id=sender_id,
+        title="Отзыв отклонён",
+        message=message,
+        notification_type="review_declined",
+        order_id=order_id,
+        is_read=False,
+    )
+    db.add(notification)
+    db.flush()
+    trim_user_notifications(db, recipient_id)
+    return notification

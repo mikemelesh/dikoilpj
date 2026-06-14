@@ -8,6 +8,7 @@ import {
 } from "../ui/dropdown-menu";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
 import { toast } from "react-toastify";
+import { showApiError } from "@/lib/apiError";
 
 import {
   exportClients,
@@ -38,7 +39,7 @@ interface ExportButtonProps {
 export const ExportButton = ({
   resource = "orders",
   filters = {},
-  title = "Orders Report",
+  title = "Отчёт",
   className = "",
 }: ExportButtonProps) => {
   const [isExporting, setIsExporting] = useState(false);
@@ -50,7 +51,7 @@ export const ExportButton = ({
       let blob: Blob;
       if (resource === "orders") blob = await exportOrders(filters, format);
       else if (resource === "clients") blob = await exportClients(format);
-      else if (resource === "technicians") blob = await exportTechnicians(format, true);
+      else if (resource === "technicians") blob = await exportTechnicians(format, { available_only: true });
       else if (resource === "materials") blob = await exportMaterials(format, filters);
       else if (resource === "gantt") blob = await exportGantt(format, filters);
       else if (resource === "orders-by-client") blob = await exportOrdersByClient(format, filters);
@@ -75,8 +76,8 @@ export const ExportButton = ({
 
       window.URL.revokeObjectURL(url);
       toast.success(`Отчёт ${format === "excel" ? "Excel" : "Word"} скачан`);
-    } catch {
-      toast.error("Ошибка экспорта");
+    } catch (error) {
+      showApiError(error, "Ошибка экспорта");
     } finally {
       setIsExporting(false);
     }

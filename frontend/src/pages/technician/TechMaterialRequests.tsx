@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
 import { getMyMaterialRequests, getMaterials, createMaterialRequest } from "@/api/technicians";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus } from "lucide-react";
+import { formatDate } from "@/utils";
 
 // Схема заявки
 const requestSchema = z.object({
@@ -49,7 +51,7 @@ export const TechMaterialRequests = () => {
       setShowModal(false);
       reset();
     },
-    onError: () => toast.error("Ошибка создания заявки"),
+    onError: mutationOnError("Ошибка создания заявки"),
   });
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<RequestFormData>({
@@ -92,7 +94,7 @@ export const TechMaterialRequests = () => {
                       {req.quantity_requested} {req.material?.unit || "шт"}
                     </TableCell>
                     <TableCell><StatusBadge status={req.status} /></TableCell>
-                    <TableCell>{new Date(req.created_at).toLocaleDateString("ru-RU")}</TableCell>
+                    <TableCell>{formatDate(req.created_at)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -8,6 +8,8 @@ import { Pagination } from "@/components/shared/Pagination";
 import { PublicLayout } from "@/components/layout/PublicLayout";
 import type { Article } from "@/types";
 import { toast } from "react-toastify";
+import { showApiError } from "@/lib/apiError";
+import { formatDate } from "@/utils";
 
 export const ArticlesPage = () => {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -24,7 +26,7 @@ export const ArticlesPage = () => {
 
     apiClient.get<{ items: Article[]; total: number }>(`/articles?${params}`)
       .then((res) => { setArticles(res.data.items); setTotal(res.data.total); })
-      .catch(() => toast.error("Ошибка загрузки"));
+      .catch((error) => showApiError(error, "Ошибка загрузки статей"));
   }, [page, search, category]);
 
   const filters: FilterConfig[] = [
@@ -62,7 +64,7 @@ export const ArticlesPage = () => {
                     {article.content.slice(0, 200)}...
                   </p>
                   <p className="mt-4 text-xs text-muted-foreground">
-                    {new Date(article.created_at).toLocaleDateString('ru-RU')}
+                    {formatDate(article.created_at)}
                   </p>
                 </CardContent>
               </Card>

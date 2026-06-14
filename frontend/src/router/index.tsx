@@ -36,6 +36,7 @@ import { ManagerServices } from "@/pages/manager/ManagerServices";
 import { ManagerPromotions } from "@/pages/manager/ManagerPromotions";
 import { ManagerMaterials } from "@/pages/manager/ManagerMaterials";
 import { ManagerProfile } from "@/pages/manager/ManagerProfile";
+import { ManagerTemplates } from "@/pages/manager/ManagerTemplates";
 import { SampleOrders } from "@/pages/manager/SampleOrders";
 
 // Pages - Admin
@@ -249,6 +250,7 @@ const ManagerRoutes = () => (
     <Route path="services" element={<ManagerServices />} />
     <Route path="promotions" element={<ManagerPromotions />} />
     <Route path="materials" element={<ManagerMaterials />} />
+    <Route path="templates" element={<ManagerTemplates />} />
     <Route path="profile" element={<ManagerProfile />} />
   </Routes>
 );

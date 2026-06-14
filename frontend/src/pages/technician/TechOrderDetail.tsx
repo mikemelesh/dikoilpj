@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
 import { getOrder, updateOrderStatus, uploadFile, deleteFile } from "@/api/orders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +19,7 @@ import { FileUpload } from "@/components/shared/FileUpload";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Download, Trash2, Eye, FileText } from "lucide-react";
 import { API_BASE_URL } from "@/api/axios";
+import { formatDate, formatDateTime } from "@/utils";
 
 // Схема для комментария
 const statusChangeSchema = z.object({
@@ -28,7 +30,6 @@ type StatusChangeData = z.infer<typeof statusChangeSchema>;
 
 // Доступные переходы статусов для техника
 const ALLOWED_TRANSITIONS: Record<string, { to: string; label: string; variant?: string }[]> = {
-  confirmed: [{ to: "in_progress", label: "Взять в работу" }],
   in_progress: [{ to: "review", label: "Отправить на проверку" }],
   review: [{ to: "in_progress", label: "Вернуть в работу" }],
 };
@@ -55,7 +56,7 @@ export const TechOrderDetail = () => {
       toast.success("Статус обновлён");
       setShowStatusModal(false);
     },
-    onError: () => toast.error("Ошибка обновления статуса"),
+    onError: mutationOnError("Ошибка обновления статуса"),
   });
 
   const uploadMutation = useMutation({
@@ -64,7 +65,7 @@ export const TechOrderDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       toast.success("Файл загружен");
     },
-    onError: () => toast.error("Ошибка загрузки файла"),
+    onError: mutationOnError("Ошибка загрузки файла"),
   });
 
   const deleteMutation = useMutation({
@@ -73,7 +74,7 @@ export const TechOrderDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       toast.success("Файл удалён");
     },
-    onError: () => toast.error("Ошибка удаления файла"),
+    onError: mutationOnError("Ошибка удаления файла"),
   });
 
   const { register, handleSubmit, reset } = useForm<StatusChangeData>({
@@ -141,7 +142,7 @@ export const TechOrderDetail = () => {
           <OrderStatusTracker currentStatus={order.status} />
           {order.deadline && (
             <p className="mt-4 text-sm text-muted-foreground">
-              Дедлайн: {new Date(order.deadline).toLocaleDateString("ru-RU")}
+              Дедлайн: {formatDate(order.deadline)}
             </p>
           )}
         </CardContent>
@@ -217,7 +218,7 @@ export const TechOrderDetail = () => {
                       <div>
                         <p className="font-medium">{file.file_name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(file.created_at).toLocaleDateString("ru-RU")} • {(file.file_size / 1024).toFixed(1)} KB
+                          {formatDate(file.created_at)} • {(file.file_size / 1024).toFixed(1)} KB
                         </p>
                       </div>
                     </div>
@@ -309,7 +310,7 @@ export const TechOrderDetail = () => {
               <TableBody>
                 {order.status_history.map((h) => (
                   <TableRow key={h.id}>
-                    <TableCell>{new Date(h.created_at).toLocaleString("ru-RU")}</TableCell>
+                    <TableCell>{formatDateTime(h.created_at)}</TableCell>
                     <TableCell><StatusBadge status={h.new_status} /></TableCell>
                     <TableCell>{h.comment || "—"}</TableCell>
                   </TableRow>

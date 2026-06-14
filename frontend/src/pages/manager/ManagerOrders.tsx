@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
 import { getOrders, assignTechnician, updateOrderStatus } from "@/api/orders";
+import { TechnicianSelectOptions } from "@/components/manager/TechnicianSelectOptions";
 import { getTechnicians } from "@/api/manager";
 import { SearchAndFilter, type FilterConfig } from "@/components/shared/SearchAndFilter";
 import { Pagination } from "@/components/shared/Pagination";
@@ -15,7 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock, User, Check, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/utils";
+import { cn, formatDate } from "@/utils";
 import type { Order } from "@/types";
 
 function isOrderUrgent(order: Order & { deadline?: string | null }) {
@@ -78,11 +80,15 @@ export const ManagerOrders = () => {
       assignTechnician(orderId, technicianId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
-      toast.success("Техник назначен");
+      queryClient.invalidateQueries({ queryKey: ["manager-new-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["technicians-all"] });
+      queryClient.invalidateQueries({ queryKey: ["manager-technicians"] });
+      toast.success("Исполнитель назначен, заказ в работе");
       setAssignModal({ orderId: "", open: false });
       setSelectedTechnician("");
     },
-    onError: () => toast.error("Ошибка назначения"),
+    onError: mutationOnError("Ошибка назначения техника"),
   });
 
   const statusMutation = useMutation({
@@ -95,7 +101,7 @@ export const ManagerOrders = () => {
       queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
       toast.success("Статус обновлён");
     },
-    onError: () => toast.error("Ошибка обновления"),
+    onError: mutationOnError("Ошибка обновления"),
   });
 
   const filterConfigs: FilterConfig[] = [
@@ -360,7 +366,7 @@ export const ManagerOrders = () => {
                         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {new Date(order.created_at).toLocaleDateString("ru-RU")}
+                            {formatDate(order.created_at)}
                           </span>
                           {order.deadline && (
                             <span
@@ -369,7 +375,7 @@ export const ManagerOrders = () => {
                               )}
                             >
                               Дедлайн:{" "}
-                              {new Date(order.deadline).toLocaleDateString("ru-RU")}
+                              {formatDate(order.deadline)}
                             </span>
                           )}
                           {order.technician_name ? (
@@ -441,7 +447,7 @@ export const ManagerOrders = () => {
                             Детали
                           </Button>
                         </Link>
-                        {!order.technician_id && (
+                        {!order.technician_id && order.status === "new" && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -472,7 +478,13 @@ export const ManagerOrders = () => {
         order={confirmOrder}
         open={!!confirmOrder}
         onClose={() => setConfirmOrder(null)}
-        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["manager-orders"] })}
+        technicians={technicians}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["manager-new-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["manager-analytics"] });
+          queryClient.invalidateQueries({ queryKey: ["technicians-all"] });
+        }}
       />
 
       {assignModal.open && (
@@ -485,11 +497,7 @@ export const ManagerOrders = () => {
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mb-4"
             >
               <option value="">Выберите техника</option>
-              {technicians?.filter((t) => t.is_available).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.first_name} {t.last_name} — {t.specialization || "Универсал"}
-                </option>
-              ))}
+              <TechnicianSelectOptions technicians={technicians} />
             </select>
             <div className="flex justify-end gap-2">
               <Button

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
 import { getMaterials, approveMaterialRequest, getMaterialRequests } from "@/api/manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertCircle, Check, X, Package } from "lucide-react";
+import { formatDate } from "@/utils";
 
 export const ManagerMaterials = () => {
   const queryClient = useQueryClient();
@@ -41,7 +43,7 @@ export const ManagerMaterials = () => {
       toast.success("Заявка обработана");
       setSelectedRequest({ id: 0, open: false });
     },
-    onError: () => toast.error("Ошибка обработки"),
+    onError: mutationOnError("Ошибка обработки"),
   });
 
   const lowStockMaterials = materials?.filter((m) => m.quantity <= m.min_quantity) || [];
@@ -81,7 +83,7 @@ export const ManagerMaterials = () => {
                     <TableCell>{request.material?.name}</TableCell>
                     <TableCell>{request.quantity_requested} {request.material?.unit}</TableCell>
                     <TableCell className="max-w-xs truncate">{request.comment || "—"}</TableCell>
-                    <TableCell>{new Date(request.created_at).toLocaleDateString("ru-RU")}</TableCell>
+                    <TableCell>{formatDate(request.created_at)}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         <Button

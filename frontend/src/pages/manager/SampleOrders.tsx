@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
 import { getOrders, createOrder, assignTechnician } from "@/api/orders";
 import { getClients, getTechnicians } from "@/api/manager";
@@ -85,10 +86,7 @@ export const SampleOrders = () => {
       resetClient();
       queryClient.invalidateQueries({ queryKey: ["manager-clients"] });
     },
-    onError: (err: any) => {
-      console.error("Error creating client:", err);
-      toast.error(err.response?.data?.detail || "Ошибка при добавлении клиента");
-    }
+    onError: mutationOnError("Ошибка при добавлении клиента"),
   });
 
   const assignTechnicianMutation = useMutation({
@@ -98,10 +96,7 @@ export const SampleOrders = () => {
       toast.success("Зуботехник успешно назначен");
       queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
     },
-    onError: (err: any) => {
-      console.error("Error assigning technician:", err);
-      toast.error(err.response?.data?.detail || "Ошибка при назначении зуботехника");
-    }
+    onError: mutationOnError("Ошибка при назначении зуботехника"),
   });
 
   const createOrderMutation = useMutation({
@@ -128,10 +123,7 @@ export const SampleOrders = () => {
       
       queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
     },
-    onError: (err: any) => {
-      console.error("Error creating order:", err);
-      toast.error(err.response?.data?.detail || "Ошибка при создании заказа");
-    }
+    onError: mutationOnError("Ошибка при создании заказа"),
   });
 
   const onClientSubmit = (data: ClientFormData) => {

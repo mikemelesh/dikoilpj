@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock, Package, CheckCircle } from "lucide-react";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { formatDate } from "@/utils";
 
 interface OrderSummary {
   id: string;
@@ -103,7 +104,7 @@ export const ClientDashboard = () => {
                   <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
                     <div>
                       <p className="font-medium">{order.order_number}</p>
-                      <p className="text-sm text-muted-foreground">{new Date(order.created_at).toLocaleDateString("ru-RU")}</p>
+                      <p className="text-sm text-muted-foreground">{formatDate(order.created_at)}</p>
                     </div>
                     <div className="flex items-center gap-4">
                       <StatusBadge status={order.status} />

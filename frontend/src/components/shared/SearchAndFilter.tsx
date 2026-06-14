@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { applyDateRangeRules, clampDateNotAfterToday, todayDateInputValue } from "@/lib/dateFilter";
 import { X } from "lucide-react";
 
 // =============================================================================
@@ -23,6 +24,9 @@ interface SearchAndFilterProps {
   filters?: FilterConfig[];
   searchPlaceholder?: string;
   debounceMs?: number;
+  /** Keys for period range validation (default date_from / date_to). */
+  dateFromKey?: string;
+  dateToKey?: string;
 }
 
 // =============================================================================
@@ -35,12 +39,17 @@ export const SearchAndFilter = ({
   filters = [],
   searchPlaceholder = "Поиск...",
   debounceMs = 300,
+  dateFromKey = "date_from",
+  dateToKey = "date_to",
 }: SearchAndFilterProps) => {
   const [searchValue, setSearchValue] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const maxDate = todayDateInputValue();
+
+  const hasDateRange = filters.some((f) => f.key === dateFromKey || f.key === dateToKey);
 
   // Debounce для поиска
-  const debouncedSearch = useMemo(() => {
+  useEffect(() => {
     const handler = setTimeout(() => {
       onSearch(searchValue);
     }, debounceMs);
@@ -53,7 +62,17 @@ export const SearchAndFilter = ({
     onFilter(filterValues);
   }, [filterValues, onFilter]);
 
-  const handleFilterChange = (key: string, value: string) => {
+  const handleFilterChange = (key: string, value: string, type: FilterConfig["type"]) => {
+    if (type === "date") {
+      setFilterValues((prev) => {
+        if (hasDateRange && (key === dateFromKey || key === dateToKey)) {
+          return applyDateRangeRules(prev, key, value, dateFromKey, dateToKey);
+        }
+        const clamped = value ? clampDateNotAfterToday(value) : "";
+        return { ...prev, [key]: clamped };
+      });
+      return;
+    }
     setFilterValues((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -82,6 +101,7 @@ export const SearchAndFilter = ({
             />
             {searchValue && (
               <button
+                type="button"
                 onClick={() => setSearchValue("")}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 aria-label="Очистить поиск"
@@ -107,12 +127,12 @@ export const SearchAndFilter = ({
           {filters.map((filter) => (
             <div key={filter.key}>
               <Label htmlFor={filter.key}>{filter.label}</Label>
-              
+
               {filter.type === "select" ? (
                 <select
                   id={filter.key}
                   value={filterValues[filter.key] || ""}
-                  onChange={(e) => handleFilterChange(filter.key, e.target.value)}
+                  onChange={(e) => handleFilterChange(filter.key, e.target.value, filter.type)}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">Все</option>
@@ -127,22 +147,23 @@ export const SearchAndFilter = ({
                   id={filter.key}
                   type="number"
                   value={filterValues[filter.key] || ""}
-                  onChange={(e) => handleFilterChange(filter.key, e.target.value)}
+                  onChange={(e) => handleFilterChange(filter.key, e.target.value, filter.type)}
                   placeholder={filter.placeholder}
                 />
               ) : filter.type === "date" ? (
                 <Input
                   id={filter.key}
                   type="date"
+                  max={maxDate}
                   value={filterValues[filter.key] || ""}
-                  onChange={(e) => handleFilterChange(filter.key, e.target.value)}
+                  onChange={(e) => handleFilterChange(filter.key, e.target.value, filter.type)}
                 />
               ) : (
                 <Input
                   id={filter.key}
                   type="text"
                   value={filterValues[filter.key] || ""}
-                  onChange={(e) => handleFilterChange(filter.key, e.target.value)}
+                  onChange={(e) => handleFilterChange(filter.key, e.target.value, filter.type)}
                   placeholder={filter.placeholder}
                 />
               )}

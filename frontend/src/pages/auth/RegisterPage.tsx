@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { getApiErrorMessage } from "@/lib/apiError";
 
 import { register as registerApi } from "@/api/auth";
 import { authStore } from "@/stores/authStore";
@@ -16,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Mail, Lock, User, Phone, UserCheck } from "lucide-react";
 import { PhoneInput } from "@/components/shared/PhoneInput";
-import { Header } from "@/components/layout/Header"; // Import the Header component
+import { PublicHeader } from "@/components/layout/PublicHeader";
 
 // =============================================================================
 // Схема валидации
@@ -38,9 +39,18 @@ const registerSchema = z.object({
   client_type: z.enum(["physical", "legal"], {
     errorMap: () => ({ message: "Выберите тип клиента" })
   }),
+  clinic_name: z.string().optional(),
 }).refine((data) => data.password === data.confirm_password, {
   message: "Пароли не совпадают",
   path: ["confirm_password"],
+}).superRefine((data, ctx) => {
+  if (data.client_type === "legal" && !data.clinic_name?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Укажите название клиники",
+      path: ["clinic_name"],
+    });
+  }
 });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
@@ -71,6 +81,7 @@ export const RegisterPage = () => {
       last_name: "",
       phone: "",
       client_type: "physical",
+      clinic_name: "",
     },
   });
 
@@ -82,7 +93,8 @@ export const RegisterPage = () => {
       // Override phone with formatted value
       const submitData = {
         ...registerData,
-        phone: phoneValue || undefined
+        phone: phoneValue || undefined,
+        clinic_name: data.client_type === "legal" ? data.clinic_name?.trim() : undefined,
       };
 
       const response = await registerApi(submitData);
@@ -111,23 +123,7 @@ export const RegisterPage = () => {
       const dashboardPath = getDashboardPath(response.user.role);
       navigate(dashboardPath, { replace: true });
     } catch (error: unknown) {
-      // Enhanced error handling for phone number related errors
-      let message = "Ошибка регистрации";
-      if (error instanceof Error) {
-        message = error.message;
-      } else if (typeof error === 'object' && error !== null && 'response' in error) {
-        const responseError = error as { response?: { data?: { detail?: string } } };
-        if (responseError.response?.data?.detail) {
-          message = responseError.response.data.detail;
-          
-          // Specific handling for phone number related errors
-          if (message.toLowerCase().includes('phone') || message.toLowerCase().includes('номер')) {
-            message = `Ошибка связанная с номером телефона: ${message}`;
-          }
-        }
-      }
-      
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, "Ошибка регистрации"));
     } finally {
       setIsLoading(false);
     }
@@ -135,8 +131,7 @@ export const RegisterPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Add the header to the registration page */}
-      <Header />
+      <PublicHeader />
       
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
@@ -230,11 +225,13 @@ export const RegisterPage = () => {
                     value={selectedType}
                     onValueChange={(value) => {
                       setSelectedType(value as RegisterFormData["client_type"]);
-                      // Надежно записываем значение поля в react-hook-form
                       setValue("client_type", value as RegisterFormData["client_type"], {
                         shouldValidate: true,
                         shouldDirty: true,
                       });
+                      if (value === "physical") {
+                        setValue("clinic_name", "", { shouldValidate: true });
+                      }
                     }}
                   >
                     <SelectTrigger className="pl-10">
@@ -250,6 +247,24 @@ export const RegisterPage = () => {
                   <p className="text-sm text-destructive">{errors.client_type.message}</p>
                 )}
               </div>
+
+              {selectedType === "legal" && (
+                <div className="space-y-2">
+                  <Label htmlFor="clinic_name">Название клиники</Label>
+                  <div className="relative">
+                    <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="clinic_name"
+                      placeholder="Стоматология «Улыбка»"
+                      className="pl-10"
+                      {...register("clinic_name")}
+                    />
+                  </div>
+                  {errors.clinic_name && (
+                    <p className="text-sm text-destructive">{errors.clinic_name.message}</p>
+                  )}
+                </div>
+              )}
 
               {/* Password */}
               <div className="space-y-2">

@@ -25,6 +25,14 @@ export interface User {
   loyalty_points?: number
 }
 
+export interface LoyaltyProgress {
+  current_discount_percent: number
+  next_discount_percent: number | null
+  next_threshold_spent: number | null
+  amount_to_next: number
+  is_max_tier: boolean
+}
+
 export interface Client {
   id: number
   user_id: string
@@ -34,6 +42,8 @@ export interface Client {
   discount_percent: number
   loyalty_tier: LoyaltyTier
   total_orders: number
+  total_spent?: number
+  loyalty_progress?: LoyaltyProgress
 }
 
 export interface Technician {
@@ -48,6 +58,7 @@ export interface Technician {
   completed_orders: number
   portfolio_description?: string
   is_available: boolean
+  today_load?: number
 }
 
 // =============================================================================
@@ -67,6 +78,7 @@ export interface Service {
   id: number
   category_id: number
   category?: ServiceCategory
+  category_name?: string
   name: string
   description?: string
   base_price: number
@@ -120,6 +132,7 @@ export interface Order {
   client_id: number
   client?: Client
   technician_id?: number
+  technician_name?: string
   technician?: Technician
   manager_id?: string
   manager?: User
@@ -321,5 +334,15 @@ export interface RegisterData {
   first_name: string
   last_name: string
   phone?: string
+  client_type: "physical" | "legal"
+  clinic_name?: string
+}
+
+export interface UpdateProfileData {
+  first_name?: string | null
+  last_name?: string | null
+  phone?: string | null
+  clinic_name?: string | null
+  address?: string | null
 }
 

@@ -1,11 +1,18 @@
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/api/axios";
+import { getOrders } from "@/api/orders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ArrowLeft, Star, Award, CheckCircle } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { formatDate } from "@/utils";
+import { formatOrderMoney } from "@/utils/orderPricing";
+import { getTechnicianLoadColorClass, formatTechnicianLoadLabel } from "@/utils/technicianLoad";
 
 interface Technician {
   id: number;
@@ -18,6 +25,7 @@ interface Technician {
   rating: number;
   completed_orders: number;
   is_available: boolean;
+  today_load?: number;
 }
 
 interface TechnicianStats {
@@ -30,17 +38,51 @@ interface TechnicianStats {
   monthly_completed: { month: string; count: number }[];
 }
 
+const ORDER_STATUS_FILTERS = [
+  { value: "in_progress", label: "В работе" },
+  { value: "confirmed,in_progress,review", label: "Активные" },
+  { value: "", label: "Все" },
+  { value: "confirmed", label: "Подтверждён" },
+  { value: "review", label: "На проверке" },
+  { value: "completed", label: "Завершён" },
+  { value: "new", label: "Новый" },
+  { value: "cancelled", label: "Отменён" },
+] as const;
+
 export const ManagerTechnicianDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const technicianId = Number(id);
+  const [statusFilter, setStatusFilter] = useState<string>("in_progress");
 
   const { data: technician } = useQuery<Technician>({
     queryKey: ["technician-detail", id],
-    queryFn: () => apiClient.get(`/technicians/${id}`).then(r => r.data),
+    queryFn: () => apiClient.get(`/technicians/${id}`).then((r) => r.data),
+    enabled: !!id,
   });
 
   const { data: stats } = useQuery<TechnicianStats>({
     queryKey: ["technician-stats", id],
-    queryFn: () => apiClient.get(`/technicians/${id}/stats`).then(r => r.data),
+    queryFn: () => apiClient.get(`/technicians/${id}/stats`).then((r) => r.data),
+    enabled: !!id,
+  });
+
+  const orderStatusParam = statusFilter
+    ? statusFilter.includes(",")
+      ? statusFilter.split(",")
+      : statusFilter
+    : undefined;
+
+  const { data: ordersData, isLoading: ordersLoading } = useQuery({
+    queryKey: ["technician-orders", id, statusFilter],
+    queryFn: () =>
+      getOrders({
+        technician_id: technicianId,
+        status: orderStatusParam,
+        limit: 50,
+        sort_by: "deadline",
+        sort_dir: "asc",
+      }),
+    enabled: Number.isFinite(technicianId),
   });
 
   if (!technician) {
@@ -56,6 +98,9 @@ export const ManagerTechnicianDetail = () => {
     );
   }
 
+  const load = technician.today_load ?? 0;
+  const nameClass = getTechnicianLoadColorClass(load);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -64,10 +109,16 @@ export const ManagerTechnicianDetail = () => {
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </Link>
-        <h1 className="text-3xl font-bold">{technician.first_name} {technician.last_name}</h1>
+        <div>
+          <h1 className={`text-3xl font-bold ${nameClass}`}>
+            {technician.first_name} {technician.last_name}
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Загрузка на сегодня: {formatTechnicianLoadLabel(load)}
+          </p>
+        </div>
       </div>
 
-      {/* Информация о технике */}
       <Card>
         <CardHeader>
           <CardTitle>Основная информация</CardTitle>
@@ -87,10 +138,8 @@ export const ManagerTechnicianDetail = () => {
               <p className="font-medium">{technician.experience_years} лет</p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Статус</p>
-              <Badge variant={technician.is_available ? "default" : "secondary"}>
-                {technician.is_available ? "Доступен" : "Недоступен"}
-              </Badge>
+              <p className="text-sm text-muted-foreground">Загрузка</p>
+              <Badge variant="outline">{formatTechnicianLoadLabel(load)}</Badge>
             </div>
           </div>
 
@@ -102,7 +151,6 @@ export const ManagerTechnicianDetail = () => {
         </CardContent>
       </Card>
 
-      {/* Статистика */}
       {stats && (
         <>
           <div className="grid gap-4 md:grid-cols-4">
@@ -174,6 +222,61 @@ export const ManagerTechnicianDetail = () => {
           </Card>
         </>
       )}
+
+      <Card>
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-4">
+          <CardTitle>Заказы техника</CardTitle>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="flex h-9 rounded-md border border-input bg-background px-3 text-sm"
+          >
+            {ORDER_STATUS_FILTERS.map((opt) => (
+              <option key={opt.value || "all"} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </CardHeader>
+        <CardContent className="p-0">
+          {ordersLoading ? (
+            <p className="p-6 text-muted-foreground">Загрузка заказов...</p>
+          ) : !ordersData?.items?.length ? (
+            <p className="p-6 text-center text-muted-foreground">Заказы не найдены</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Номер</TableHead>
+                  <TableHead>Статус</TableHead>
+                  <TableHead>Дедлайн</TableHead>
+                  <TableHead>Сумма</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ordersData.items.map((order) => (
+                  <TableRow key={order.id}>
+                    <TableCell className="font-medium">{order.order_number}</TableCell>
+                    <TableCell>
+                      <StatusBadge status={order.status} />
+                    </TableCell>
+                    <TableCell>{order.deadline ? formatDate(order.deadline) : "—"}</TableCell>
+                    <TableCell>{formatOrderMoney(order.final_price)}</TableCell>
+                    <TableCell>
+                      <Link to={`/manager/orders/${order.id}`}>
+                        <Button variant="ghost" size="sm">
+                          Открыть
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

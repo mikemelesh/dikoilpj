@@ -13,6 +13,7 @@ import { X } from "lucide-react";
 import { ExportButton } from "../../components/shared/ExportButton";
 import { SearchAndFilter, type FilterConfig } from "../../components/shared/SearchAndFilter";
 import { toExportFilters } from "@/lib/exportFilters";
+import { formatDate } from "@/utils";
 
 // Преобразование статуса в прогресс
 const statusToProgress = (status: string): number => {
@@ -214,8 +215,8 @@ export const ManagerGantt = () => {
             <div className="space-y-2">
               <p><span className="font-medium">Клиент:</span> {selectedOrderData.client_name || "Не указан"}</p>
               <p><span className="font-medium">Техник:</span> {selectedOrderData.technician_name || "Не назначен"}</p>
-              <p><span className="font-medium">Создан:</span> {new Date(selectedOrderData.created_at).toLocaleDateString("ru-RU")}</p>
-              {selectedOrderData.deadline && <p><span className="font-medium">Дедлайн:</span> {new Date(selectedOrderData.deadline).toLocaleDateString("ru-RU")}</p>}
+              <p><span className="font-medium">Создан:</span> {formatDate(selectedOrderData.created_at)}</p>
+              {selectedOrderData.deadline && <p><span className="font-medium">Дедлайн:</span> {formatDate(selectedOrderData.deadline)}</p>}
               <p><span className="font-medium">Сумма:</span> {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(selectedOrderData.final_price))}</p>
             </div>
 

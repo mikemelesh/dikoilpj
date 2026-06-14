@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from ..database import get_db
 from ..dependencies.auth import get_current_active_user, require_roles
 from ..models.client import Client
-from ..models.order import Order
+from ..models.order import Order, OrderStatus
 from ..models.review import Review
 from ..models.technician import Technician
 from ..models.user import User, UserRole
@@ -21,6 +21,7 @@ from ..schemas.secondary import (
     ReviewModerateRequest,
     ReviewResponse,
 )
+from ..utils.notifications import create_review_declined_notification
 from ..utils.security import log_action
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
@@ -80,14 +81,19 @@ async def create_review(
     Доступно: client.
     """
     # Получаем профиль клиента
-    client = db.query(Client).filter(Client.user_id == current_user.id).first()
+    client = (
+        db.query(Client)
+        .options(joinedload(Client.user))
+        .filter(Client.user_id == current_user.id)
+        .first()
+    )
     if not client:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Профиль клиента не найден"
         )
-    
-    # Если указан order_id, проверяем заказ и что клиент его владелец
+
+    order = None
     order_id = None
     if review_data.order_id:
         order = db.query(Order).filter(Order.id == review_data.order_id).first()
@@ -101,8 +107,12 @@ async def create_review(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Нельзя оставить отзыв на чужой заказ"
             )
-        
-        # Проверяем, нет ли уже отзыва на этот заказ
+        if order.status not in (OrderStatus.COMPLETED, OrderStatus.ARCHIVED):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Отзыв можно оставить только на завершённый заказ"
+            )
+
         existing = db.query(Review).filter(
             Review.client_id == client.id,
             Review.order_id == order.id
@@ -112,7 +122,7 @@ async def create_review(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Отзыв на этот заказ уже оставлен"
             )
-        
+
         order_id = order.id
     
     db_review = Review(
@@ -136,12 +146,17 @@ async def create_review(
         description="Создан новый отзыв",
     )
     
+    client_name = None
+    if client.user:
+        parts = [client.user.first_name, client.user.last_name]
+        client_name = " ".join(p for p in parts if p).strip() or None
+
     return ReviewResponse(
         id=db_review.id,
         client_id=db_review.client_id,
-        client_name=f"{client.user.first_name} {client.user.last_name}",
+        client_name=client_name,
         order_id=str(db_review.order_id) if db_review.order_id else None,
-        order_number=None,
+        order_number=order.order_number if order else None,
         rating=db_review.rating,
         text=db_review.text,
         is_moderated=db_review.is_moderated,
@@ -202,7 +217,8 @@ async def moderate_review(
     Доступно: admin.
     """
     review = db.query(Review).options(
-        joinedload(Review.client).joinedload(Client.user)
+        joinedload(Review.client).joinedload(Client.user),
+        joinedload(Review.order),
     ).filter(Review.id == review_id).first()
     
     if not review:
@@ -212,8 +228,22 @@ async def moderate_review(
         )
     
     old_published = review.is_published
+    old_moderated = review.is_moderated
     review.is_published = moderate_data.is_published
     review.is_moderated = True
+
+    declined_now = (
+        not moderate_data.is_published
+        and (old_published or not old_moderated)
+    )
+    if declined_now and review.client and review.client.user_id:
+        create_review_declined_notification(
+            db,
+            recipient_id=str(review.client.user_id),
+            order_id=str(review.order_id) if review.order_id else None,
+            order_number=review.order.order_number if review.order else None,
+            sender_id=str(current_user.id),
+        )
     
     db.add(review)
     db.commit()

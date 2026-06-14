@@ -1,58 +1,69 @@
 """
-Скрипт для очистки базы данных от всех записей.
-Запуск: python -m app.clear_db (из директории backend/)
+Скрипт для полной очистки базы данных.
+Запуск: python3 -m app.clear_db (из директории backend/)
 """
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Загружаем .env файл
+from dotenv import load_dotenv
+from sqlalchemy import text
+
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
-from sqlalchemy import text
-from .database import SessionLocal, engine
+from .database import SessionLocal, engine, Base
+
+TRUNCATE_TABLES = """
+TRUNCATE TABLE
+    notifications,
+    action_logs,
+    order_status_history,
+    order_items,
+    order_files,
+    material_requests,
+    reviews,
+    order_templates,
+    orders,
+    clients,
+    technicians,
+    materials,
+    services,
+    service_categories,
+    articles,
+    knowledge_base,
+    faqs,
+    promotions,
+    users
+RESTART IDENTITY CASCADE
+"""
+
+
+def flush_all_data(db=None):
+    """Удаляет все данные, сохраняя схему таблиц."""
+    own_session = db is None
+    if own_session:
+        db = SessionLocal()
+    try:
+        db.execute(text(TRUNCATE_TABLES))
+        db.commit()
+        print("✅ Все данные удалены")
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        if own_session:
+            db.close()
 
 
 def clear_database():
-    """Удаление всех записей из базы данных."""
-    print("🗑️  Очистка базы данных...")
-    
+    """Полный сброс: удаление и пересоздание таблиц."""
+    print("🗑️  Полный сброс базы данных...")
     db = SessionLocal()
     try:
-        # Получаем список всех таблиц в правильном порядке (сначала дочерние)
-        tables_order = [
-            "order_status_history",
-            "order_items",
-            "material_requests",
-            "reviews",
-            "articles",
-            "promotion_applies_to",
-            "promotions",
-            "knowledge_base",
-            "client_profiles",
-            "technician_profiles",
-            "services",
-            "service_categories",
-            "orders",
-            "materials",
-            "user_logging",
-            "users",
-        ]
-        
-        for table in tables_order:
-            try:
-                db.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
-                print(f"  ✅ Удалена таблица {table}")
-            except Exception as e:
-                print(f"  ⚠️  Таблица {table}: {str(e)}")
-        
+        db.execute(text("DROP SCHEMA public CASCADE"))
+        db.execute(text("CREATE SCHEMA public"))
         db.commit()
-        
-        # Пересоздаем все таблицы
-        from .database import Base
         Base.metadata.create_all(bind=engine)
-        print("\n✅ Таблицы пересозданы!")
-        
+        print("✅ Таблицы пересозданы")
     except Exception as e:
         db.rollback()
         print(f"\n❌ Ошибка при очистке: {e}")
@@ -62,4 +73,4 @@ def clear_database():
 
 
 if __name__ == "__main__":
-    clear_database()
+    flush_all_data()

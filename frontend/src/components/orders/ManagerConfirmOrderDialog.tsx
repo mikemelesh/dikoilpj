@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { getApiErrorMessage } from "@/lib/apiError";
 
-import { updateOrderPricing, updateOrderStatus } from "@/api/orders";
-import type { Order } from "@/types";
+import { updateOrderPricing, updateOrderStatus, assignTechnician } from "@/api/orders";
+import type { Order, Technician } from "@/types";
+import { TechnicianSelectOptions } from "@/components/manager/TechnicianSelectOptions";
 import {
   MANAGER_REPLY_TEMPLATES,
   fillReplyTemplate,
@@ -12,6 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { formatDate } from "@/utils";
+import {
+  discountFromFinal,
+  finalFromDiscount,
+  formatOrderMoney,
+  roundMoney,
+} from "@/utils/orderPricing";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +33,7 @@ interface ManagerConfirmOrderDialogProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  technicians?: Technician[];
 }
 
 export const ManagerConfirmOrderDialog = ({
@@ -31,28 +41,49 @@ export const ManagerConfirmOrderDialog = ({
   open,
   onClose,
   onSuccess,
+  technicians,
 }: ManagerConfirmOrderDialogProps) => {
   const [finalPrice, setFinalPrice] = useState("");
   const [discountAmount, setDiscountAmount] = useState("");
   const [templateId, setTemplateId] = useState(MANAGER_REPLY_TEMPLATES[0].id);
   const [message, setMessage] = useState("");
+  const [technicianId, setTechnicianId] = useState<number | "">("");
 
   useEffect(() => {
     if (!order || !open) return;
     setFinalPrice(String(order.final_price ?? ""));
     setDiscountAmount(String(order.discount_amount ?? ""));
+    setTechnicianId(order.technician_id ?? "");
     const tpl = MANAGER_REPLY_TEMPLATES[0];
     setTemplateId(tpl.id);
     setMessage(
       fillReplyTemplate(tpl.text, {
         order_number: order.order_number,
-        final_price: formatMoney(order.final_price),
+        final_price: formatOrderMoney(order.final_price),
         deadline: order.deadline
-          ? new Date(order.deadline).toLocaleDateString("ru-RU")
+          ? formatDate(order.deadline)
           : undefined,
       })
     );
   }, [order, open]);
+
+  const subtotal = order ? Number(order.total_price) : 0;
+
+  const handleFinalPriceChange = (value: string) => {
+    setFinalPrice(value);
+    const parsed = parseFloat(value);
+    if (!Number.isNaN(parsed)) {
+      setDiscountAmount(String(discountFromFinal(subtotal, parsed)));
+    }
+  };
+
+  const handleDiscountChange = (value: string) => {
+    setDiscountAmount(value);
+    const parsed = parseFloat(value);
+    if (!Number.isNaN(parsed)) {
+      setFinalPrice(String(finalFromDiscount(subtotal, parsed)));
+    }
+  };
 
   const confirmMutation = useMutation({
     mutationFn: async () => {
@@ -62,23 +93,34 @@ export const ManagerConfirmOrderDialog = ({
       if (Number.isNaN(price) || price < 0) {
         throw new Error("Укажите корректную итоговую сумму");
       }
+      if (Number.isNaN(discount) || discount < 0) {
+        throw new Error("Укажите корректную скидку");
+      }
+      if (discount > subtotal) {
+        throw new Error("Скидка не может превышать сумму без скидки");
+      }
       await updateOrderPricing(order.id, {
-        final_price: price,
-        discount_amount: Number.isNaN(discount) ? undefined : discount,
+        final_price: roundMoney(price),
+        discount_amount: roundMoney(discount),
       });
-      await updateOrderStatus(order.id, {
-        new_status: "confirmed",
-        comment: message.trim() || "Заказ подтверждён менеджером",
-      });
+      if (technicianId) {
+        await assignTechnician(order.id, Number(technicianId));
+      } else {
+        await updateOrderStatus(order.id, {
+          new_status: "confirmed",
+          comment: message.trim() || "Заказ подтверждён менеджером",
+        });
+      }
     },
     onSuccess: () => {
-      toast.success("Заказ подтверждён");
+      toast.success(
+        technicianId ? "Заказ подтверждён и передан в работу" : "Заказ подтверждён"
+      );
       onSuccess();
       onClose();
     },
     onError: (err: unknown) => {
-      const msg = err instanceof Error ? err.message : "Ошибка подтверждения";
-      toast.error(msg);
+      toast.error(getApiErrorMessage(err, "Ошибка подтверждения заказа"));
     },
   });
 
@@ -89,9 +131,9 @@ export const ManagerConfirmOrderDialog = ({
     setMessage(
       fillReplyTemplate(tpl.text, {
         order_number: order.order_number,
-        final_price: formatMoney(parseFloat(finalPrice) || order.final_price),
+        final_price: formatOrderMoney(parseFloat(finalPrice) || order.final_price),
         deadline: order.deadline
-          ? new Date(order.deadline).toLocaleDateString("ru-RU")
+          ? formatDate(order.deadline)
           : undefined,
       })
     );
@@ -107,6 +149,9 @@ export const ManagerConfirmOrderDialog = ({
         </DialogHeader>
 
         <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Сумма без скидки: <strong>{formatOrderMoney(subtotal)}</strong>
+          </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="final_price">Итоговая сумма (BYN)</Label>
@@ -115,8 +160,9 @@ export const ManagerConfirmOrderDialog = ({
                 type="number"
                 step="0.01"
                 min="0"
+                max={subtotal}
                 value={finalPrice}
-                onChange={(e) => setFinalPrice(e.target.value)}
+                onChange={(e) => handleFinalPriceChange(e.target.value)}
               />
             </div>
             <div>
@@ -126,10 +172,32 @@ export const ManagerConfirmOrderDialog = ({
                 type="number"
                 step="0.01"
                 min="0"
+                max={subtotal}
                 value={discountAmount}
-                onChange={(e) => setDiscountAmount(e.target.value)}
+                onChange={(e) => handleDiscountChange(e.target.value)}
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="confirm_technician">Исполнитель</Label>
+            <select
+              id="confirm_technician"
+              value={technicianId}
+              onChange={(e) =>
+                setTechnicianId(e.target.value ? Number(e.target.value) : "")
+              }
+              className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Без назначения (только подтверждение)</option>
+              <TechnicianSelectOptions
+                technicians={technicians}
+                currentTechnicianId={order.technician_id}
+              />
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              При выборе исполнителя заказ сразу переходит в статус «В работе».
+            </p>
           </div>
 
           <div>
@@ -166,7 +234,11 @@ export const ManagerConfirmOrderDialog = ({
               onClick={() => confirmMutation.mutate()}
               disabled={confirmMutation.isPending}
             >
-              {confirmMutation.isPending ? "Сохранение..." : "Подтвердить заказ"}
+              {confirmMutation.isPending
+                ? "Сохранение..."
+                : technicianId
+                  ? "Подтвердить и передать в работу"
+                  : "Подтвердить заказ"}
             </Button>
           </div>
         </div>
@@ -174,12 +246,3 @@ export const ManagerConfirmOrderDialog = ({
     </Dialog>
   );
 };
-
-function formatMoney(value: number | string): string {
-  const n = Number(value);
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "BYN",
-    minimumFractionDigits: 2,
-  }).format(Number.isNaN(n) ? 0 : n);
-}

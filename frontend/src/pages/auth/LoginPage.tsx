@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
+import { getApiErrorMessage } from "@/lib/apiError";
 import { Eye, EyeOff, Mail, Lock, Building2 } from "lucide-react";
 
 import { login as loginApi } from "@/api/auth";
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Header } from "@/components/layout/Header"; // Import the Header component
+import { PublicHeader } from "@/components/layout/PublicHeader";
 
 // =============================================================================
 // Схема валидации
@@ -76,23 +77,7 @@ export const LoginPage = () => {
       const dashboardPath = getDashboardPath(response.user.role);
       navigate(dashboardPath, { replace: true });
     } catch (error: unknown) {
-      // Enhanced error handling for phone number related errors
-      let message = "Неверный email или пароль";
-      if (error instanceof Error) {
-        message = error.message;
-      } else if (typeof error === 'object' && error !== null && 'response' in error) {
-        const responseError = error as { response?: { data?: { detail?: string } } };
-        if (responseError.response?.data?.detail) {
-          message = responseError.response.data.detail;
-          
-          // Specific handling for phone number related errors
-          if (message.toLowerCase().includes('phone') || message.toLowerCase().includes('номер')) {
-            message = `Ошибка связанная с номером телефона: ${message}`;
-          }
-        }
-      }
-      
-      toast.error(message);
+      toast.error(getApiErrorMessage(error, "Неверный email или пароль"));
     } finally {
       setIsLoading(false);
     }
@@ -100,8 +85,7 @@ export const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Add the header to the login page */}
-      <Header />
+      <PublicHeader />
       
       <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center p-4">
         <Card className="w-full max-w-md">

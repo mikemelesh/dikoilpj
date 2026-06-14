@@ -10,7 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Star, Download } from "lucide-react";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { SearchAndFilter, type FilterConfig } from "@/components/shared/SearchAndFilter";
+import { TechnicianNameWithLoad } from "@/components/manager/TechnicianSelectOptions";
 import { toExportFilters } from "@/lib/exportFilters";
+import { formatTechnicianLoadLabel } from "@/utils/technicianLoad";
 
 // Функция для получения имени техника
 const getTechnicianName = (tech: any) => {
@@ -27,7 +29,7 @@ export const ManagerTechnicians = () => {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
 
-  const [sortBy, setSortBy] = useState<"name" | "rating" | "completed_orders" | "is_available">("rating");
+  const [sortBy, setSortBy] = useState<"name" | "rating" | "completed_orders" | "today_load">("today_load");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const toggleSort = (nextSortBy: typeof sortBy) => {
@@ -65,9 +67,8 @@ export const ManagerTechnicians = () => {
           return toNum(t.rating);
         case "completed_orders":
           return toNum(t.completed_orders);
-        case "is_available":
-          // normalize to 0/1 so boolean sort is deterministic
-          return t.is_available ? 1 : 0;
+        case "today_load":
+          return toNum(t.today_load) ?? 0;
         default:
           return "";
       }
@@ -115,7 +116,12 @@ export const ManagerTechnicians = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Сотрудники</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Сотрудники</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Загрузка на сегодня: зелёный 1 · жёлтый 2 · оранжевый 3 · красный 4 (макс.)
+          </p>
+        </div>
         <ExportButton resource="orders-by-technician" filters={exportFilters} title="Сводка заказов по исполнителям" />
       </div>
 
@@ -146,8 +152,8 @@ export const ManagerTechnicians = () => {
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("completed_orders")}>
                     Выполнено{sortBy === "completed_orders" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
                   </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("is_available")}>
-                    Статус{sortBy === "is_available" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("today_load")}>
+                    Загрузка{sortBy === "today_load" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
                   </TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -157,7 +163,9 @@ export const ManagerTechnicians = () => {
                   <TableRow key={tech.id}>
                     <TableCell>
                       <div>
-                        <p className="font-medium">{getTechnicianName(tech)}</p>
+                        <p className="font-medium">
+                          <TechnicianNameWithLoad tech={tech} />
+                        </p>
                         <p className="text-sm text-muted-foreground">{tech.user?.email || tech.user_id}</p>
                       </div>
                     </TableCell>
@@ -170,7 +178,7 @@ export const ManagerTechnicians = () => {
                     </TableCell>
                     <TableCell>{tech.completed_orders}</TableCell>
                     <TableCell>
-                      <Badge variant={tech.is_available ? "default" : "secondary"}>{tech.is_available ? "Доступен" : "Недоступен"}</Badge>
+                      <Badge variant="outline">{formatTechnicianLoadLabel(tech.today_load ?? 0)}</Badge>
                     </TableCell>
                     <TableCell>
                       <Link to={`/manager/technicians/${tech.id}`}>

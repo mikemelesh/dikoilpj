@@ -18,7 +18,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/utils";
+import { mutationOnError } from "@/lib/apiError";
+import { cn, formatDateTime } from "@/utils";
 
 const NOTIFICATIONS_REFETCH_MS = 30_000;
 /** ~10 rows visible; scroll for the rest (up to 30 in API). */
@@ -34,6 +35,7 @@ export const NotificationBell = () => {
     refetchInterval: NOTIFICATIONS_REFETCH_MS,
     refetchOnWindowFocus: true,
     staleTime: 10_000,
+    meta: { skipErrorToast: true },
   });
 
   const invalidateClientOrders = () => {
@@ -48,6 +50,7 @@ export const NotificationBell = () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       invalidateClientOrders();
     },
+    onError: mutationOnError("Не удалось отметить уведомление"),
   });
 
   const markAllReadMutation = useMutation({
@@ -56,6 +59,7 @@ export const NotificationBell = () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       invalidateClientOrders();
     },
+    onError: mutationOnError("Не удалось отметить уведомления прочитанными"),
   });
 
   const unreadCount = data?.unread_count ?? 0;
@@ -125,7 +129,7 @@ export const NotificationBell = () => {
                 <span className="text-sm font-medium leading-snug">{n.title}</span>
                 <span className="text-sm leading-snug text-muted-foreground">{n.message}</span>
                 <span className="text-xs text-muted-foreground">
-                  {new Date(n.created_at).toLocaleString("ru-RU")}
+                  {formatDateTime(n.created_at)}
                 </span>
               </DropdownMenuItem>
             ))

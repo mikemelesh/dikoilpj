@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
+import { ApiErrorAlert } from "@/components/shared/ApiErrorAlert";
 
 import { getOrder, uploadFile, deleteFile } from "@/api/orders";
 import { clientOrdersQueryOptions } from "@/lib/clientOrdersQuery";
@@ -21,17 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ArrowLeft, Download, Trash2, Star, Eye, FileText } from "lucide-react";
 import type { Order, OrderFile } from "@/types";
 import { API_BASE_URL } from "@/api/axios";
-
-// =============================================================================
-// Схема отзыва
-// =============================================================================
-
-const reviewSchema = z.object({
-  rating: z.number().min(1).max(5),
-  text: z.string().max(2000).optional(),
-});
-
-type ReviewFormData = z.infer<typeof reviewSchema>;
+import { formatDate, formatDateTime } from "@/utils";
 
 // =============================================================================
 // Компонент ClientOrderDetail
@@ -44,14 +33,22 @@ export const ClientOrderDetail = () => {
   const [hoverRating, setHoverRating] = useState(0);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [viewFile, setViewFile] = useState<OrderFile | null>(null);
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, error } = useQuery({
     queryKey: ["order", id],
     queryFn: () => getOrder(id!),
     enabled: !!id,
     ...clientOrdersQueryOptions,
+    meta: { skipErrorToast: true },
   });
+
+  useEffect(() => {
+    setReviewSubmitted(false);
+    setReviewRating(0);
+    setReviewText("");
+  }, [id]);
 
   const uploadMutation = useMutation({
     mutationFn: ({ orderId, file }: { orderId: string; file: File }) =>
@@ -60,7 +57,7 @@ export const ClientOrderDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       toast.success("Файл загружен");
     },
-    onError: () => toast.error("Ошибка загрузки файла"),
+    onError: mutationOnError("Ошибка загрузки файла"),
   });
 
   const deleteMutation = useMutation({
@@ -70,7 +67,7 @@ export const ClientOrderDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       toast.success("Файл удалён");
     },
-    onError: () => toast.error("Ошибка удаления файла"),
+    onError: mutationOnError("Ошибка удаления файла"),
   });
 
   const createReviewMutation = useMutation({
@@ -89,11 +86,9 @@ export const ClientOrderDetail = () => {
       toast.success("Отзыв отправлен на модерацию");
       setReviewRating(0);
       setReviewText("");
+      setReviewSubmitted(true);
     },
-    onError: (err: unknown) => {
-      const message = err instanceof Error ? err.message : "Ошибка отправки отзыва";
-      toast.error(message);
-    },
+    onError: mutationOnError("Ошибка отправки отзыва"),
   });
 
   const handleFilesChange = (files: File[]) => {
@@ -107,6 +102,13 @@ export const ClientOrderDetail = () => {
   const canUpload = order && !["completed", "cancelled", "archived"].includes(order.status);
 
   if (isLoading) return <div className="p-8 text-center">Загрузка...</div>;
+  if (isError) {
+    return (
+      <div className="p-8 max-w-lg mx-auto">
+        <ApiErrorAlert error={error} fallback="Не удалось загрузить заказ" />
+      </div>
+    );
+  }
   if (!order) return <div className="p-8 text-center">Заказ не найден</div>;
 
   return (
@@ -136,7 +138,7 @@ export const ClientOrderDetail = () => {
           <OrderStatusTracker currentStatus={order.status} />
           {order.deadline && (
             <p className="mt-4 text-sm text-muted-foreground">
-              Дедлайн: {new Date(order.deadline).toLocaleDateString("ru-RU")}
+              Дедлайн: {formatDate(order.deadline)}
             </p>
           )}
         </CardContent>
@@ -210,7 +212,7 @@ export const ClientOrderDetail = () => {
                       <div>
                         <p className="font-medium">{file.file_name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {new Date(file.created_at).toLocaleDateString("ru-RU")} • {(file.file_size / 1024).toFixed(1)} KB
+                          {formatDate(file.created_at)} • {(file.file_size / 1024).toFixed(1)} KB
                         </p>
                       </div>
                     </div>
@@ -307,7 +309,7 @@ export const ClientOrderDetail = () => {
               <TableBody>
                 {order.status_history.map((h) => (
                   <TableRow key={h.id}>
-                    <TableCell>{new Date(h.created_at).toLocaleString("ru-RU")}</TableCell>
+                    <TableCell>{formatDateTime(h.created_at)}</TableCell>
                     <TableCell><StatusBadge status={h.new_status} /></TableCell>
                     <TableCell>{h.comment || "—"}</TableCell>
                   </TableRow>
@@ -325,6 +327,12 @@ export const ClientOrderDetail = () => {
             <CardTitle>Оставить отзыв</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {reviewSubmitted ? (
+              <p className="text-sm text-muted-foreground">
+                Спасибо! Отзыв отправлен и появится на сайте после проверки администратором.
+              </p>
+            ) : (
+            <>
             <div className="flex gap-2">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
@@ -358,8 +366,10 @@ export const ClientOrderDetail = () => {
                 });
               }}
             >
-              Отправить отзыв
+              {createReviewMutation.isPending ? "Отправка..." : "Отправить отзыв"}
             </Button>
+            </>
+            )}
           </CardContent>
         </Card>
       )}

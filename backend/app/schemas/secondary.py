@@ -318,3 +318,10 @@ class BackupResponse(BaseModel):
     filename: str
     size: int
     created_at: datetime
+
+
+class BackupRestoreResponse(BaseModel):
+    """Ответ восстановления из бэкапа."""
+    filename: str
+    message: str
+    restored_at: datetime

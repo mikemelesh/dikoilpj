@@ -13,15 +13,29 @@ OrderPriorityEnum = str
 
 
 # Order Templates
+class OrderTemplateItem(BaseModel):
+    service_id: int = Field(..., gt=0)
+    quantity: int = Field(default=1, ge=1)
+    service_name: Optional[str] = None
+    specifications: Optional[Dict[str, Any]] = None
+
+
 class OrderTemplateCreate(BaseModel):
     name: str = Field(..., max_length=255)
-    items: List[Dict[str, Any]] = Field(..., min_length=1)
+    items: List[OrderTemplateItem] = Field(..., min_length=1)
     notes: Optional[str] = Field(None, max_length=2000)
+    client_id: Optional[int] = Field(
+        None,
+        gt=0,
+        description="ID клиента (обязательно для manager/admin)",
+    )
 
 
 class OrderTemplateResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    client_id: int
+    client_name: Optional[str] = None
     name: str
     items: list
     notes: Optional[str] = None

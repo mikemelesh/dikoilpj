@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
  import { getPromotions, createPromotion, updatePromotion, deletePromotion, getServices, getServiceCategories } from "@/api/manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { formatDate } from "@/utils";
 
 const promotionSchema = z.object({
   title: z.string().min(1, "Название обязательно"),
@@ -47,7 +49,7 @@ export const ManagerPromotions = () => {
       toast.success("Акция создана"); 
       setModalOpen(false); 
     }, 
-    onError: (error: any) => toast.error(error.response?.data?.detail || "Ошибка создания") 
+    onError: mutationOnError("Ошибка создания акции"),
   });
   
   const updateMutation = useMutation({ 
@@ -58,7 +60,7 @@ export const ManagerPromotions = () => {
       setModalOpen(false); 
       setEditingPromotion(null); 
     }, 
-    onError: (error: any) => toast.error(error.response?.data?.detail || "Ошибка обновления") 
+    onError: mutationOnError("Ошибка обновления акции"),
   });
   
   const deleteMutation = useMutation({ 
@@ -67,7 +69,7 @@ export const ManagerPromotions = () => {
       queryClient.invalidateQueries({ queryKey: ["manager-promotions"] }); 
       toast.success("Акция удалена"); 
     }, 
-    onError: (error: any) => toast.error(error.response?.data?.detail || "Ошибка удаления") 
+    onError: mutationOnError("Ошибка удаления акции"),
   });
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<PromotionFormData>({
@@ -148,7 +150,7 @@ export const ManagerPromotions = () => {
                     </div>
                   </TableCell>
                   <TableCell><Badge variant="default">{p.discount_percent}%</Badge></TableCell>
-                  <TableCell>{new Date(p.start_date).toLocaleDateString("ru-RU")} — {new Date(p.end_date).toLocaleDateString("ru-RU")}</TableCell>
+                  <TableCell>{formatDate(p.start_date)} — {formatDate(p.end_date)}</TableCell>
                   <TableCell>
                     <Badge variant="outline">
                       {(() => {

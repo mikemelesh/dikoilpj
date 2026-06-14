@@ -1,19 +1,22 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 
 import { getOrderAnalytics, assignTechnician, getMaterialRequests, approveMaterialRequest, getTechnicians } from "@/api/manager";
+import { TechnicianSelectOptions } from "@/components/manager/TechnicianSelectOptions";
 import { getOrders, updateOrderStatus } from "@/api/orders";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Package, Clock, AlertCircle, TrendingUp, Check, User, X } from "lucide-react";
-import type { Order, Technician } from "@/types";
+import type { Order } from "@/types";
+import { formatDate } from "@/utils";
 
 export const ManagerDashboard = () => {
   const queryClient = useQueryClient();
+  const [selectedTechnicians, setSelectedTechnicians] = useState<Record<string, string>>({});
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
 
@@ -42,26 +45,44 @@ export const ManagerDashboard = () => {
     queryFn: getTechnicians,
   });
 
-  console.log("Manager Dashboard Data:", { analytics, newOrdersData, materialRequests });
+  const invalidateOrderQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["manager-new-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["manager-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["manager-analytics"] });
+    queryClient.invalidateQueries({ queryKey: ["technicians-list"] });
+    queryClient.invalidateQueries({ queryKey: ["technicians-all"] });
+  };
 
-  const assignMutation = useMutation({
-    mutationFn: ({ orderId, technicianId }: { orderId: string; technicianId: number }) =>
-      assignTechnician(orderId, technicianId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["manager-new-orders"] });
-      toast.success("Техник назначен");
+  const approveMutation = useMutation({
+    mutationFn: async ({
+      orderId,
+      technicianId,
+    }: {
+      orderId: string;
+      technicianId?: number;
+    }) => {
+      if (technicianId) {
+        return assignTechnician(orderId, technicianId);
+      }
+      return updateOrderStatus(orderId, {
+        new_status: "confirmed",
+        comment: "Подтверждено менеджером",
+      });
     },
-    onError: () => toast.error("Ошибка назначения"),
-  });
-
-  const confirmMutation = useMutation({
-    mutationFn: (orderId: string) => updateOrderStatus(orderId, { new_status: "confirmed", comment: "Подтверждено менеджером" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["manager-new-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["manager-analytics"] });
-      toast.success("Заказ подтверждён");
+    onSuccess: (_data, variables) => {
+      invalidateOrderQueries();
+      setSelectedTechnicians((prev) => {
+        const next = { ...prev };
+        delete next[variables.orderId];
+        return next;
+      });
+      toast.success(
+        variables.technicianId
+          ? "Заказ передан в работу"
+          : "Заказ подтверждён"
+      );
     },
-    onError: () => toast.error("Ошибка подтверждения"),
+    onError: mutationOnError("Ошибка подтверждения заказа"),
   });
 
   const approveRequestMutation = useMutation({
@@ -71,7 +92,7 @@ export const ManagerDashboard = () => {
       queryClient.invalidateQueries({ queryKey: ["manager-pending-requests"] });
       toast.success("Заявка обработана");
     },
-    onError: () => toast.error("Ошибка обработки"),
+    onError: mutationOnError("Ошибка обработки"),
   });
 
   const newOrders = newOrdersData?.items || [];
@@ -153,50 +174,71 @@ export const ManagerDashboard = () => {
             <p className="text-center text-muted-foreground py-8">Нет новых заказов</p>
           ) : (
             <div className="space-y-4">
-              {newOrders.map((order) => (
+              {newOrders.map((order) => {
+                const selectedTech = selectedTechnicians[order.id] ?? "";
+                const resolvedTechId =
+                  order.technician_id ??
+                  (selectedTech ? Number(selectedTech) : undefined);
+
+                return (
                 <div key={order.id} className="flex flex-wrap items-center justify-between gap-4 p-4 border rounded-lg">
                   <div className="space-y-1">
-                    <p className="font-medium">{order.order_number}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{order.order_number}</p>
+                      <StatusBadge status={order.status} />
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(order.final_price))}
                       {order.deadline && (
                         <span className={new Date(order.deadline) < new Date() ? " text-red-500 font-medium" : ""}>
-                          {" • "}Дедлайн: {new Date(order.deadline).toLocaleDateString("ru-RU")}
+                          {" • "}Дедлайн: {formatDate(order.deadline)}
                         </span>
                       )}
                     </p>
+                    {order.technician_name ? (
+                      <p className="flex items-center gap-1 text-sm text-primary">
+                        <User className="h-3 w-3" />
+                        Исполнитель: {order.technician_name}
+                      </p>
+                    ) : (
+                      <select
+                        value={selectedTech}
+                        onChange={(e) =>
+                          setSelectedTechnicians((prev) => ({
+                            ...prev,
+                            [order.id]: e.target.value,
+                          }))
+                        }
+                        disabled={approveMutation.isPending}
+                        className="mt-1 flex h-9 w-full max-w-sm rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">Выберите исполнителя</option>
+                        <TechnicianSelectOptions technicians={technicians} />
+                      </select>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => confirmMutation.mutate(order.id)}
-                      disabled={confirmMutation.isPending}
+                      onClick={() =>
+                        approveMutation.mutate({
+                          orderId: order.id,
+                          technicianId: resolvedTechId,
+                        })
+                      }
+                      disabled={approveMutation.isPending}
                     >
-                      <Check className="mr-1 h-4 w-4" /> Подтвердить
+                      <Check className="mr-1 h-4 w-4" />
+                      {resolvedTechId ? "Подтвердить и в работу" : "Подтвердить"}
                     </Button>
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          assignMutation.mutate({ orderId: order.id, technicianId: Number(e.target.value) });
-                        }
-                      }}
-                      defaultValue=""
-                      className="flex h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="">Назначить техника</option>
-                      {technicians?.filter((t) => t.is_available).map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.user?.first_name} {t.user?.last_name}
-                        </option>
-                      ))}
-                    </select>
                     <Link to={`/manager/orders/${order.id}`}>
                       <Button variant="ghost" size="sm">Детали</Button>
                     </Link>
                   </div>
                 </div>
-              ))}
+              );
+              })}
             </div>
           )}
         </CardContent>

@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 import { apiClient } from "@/api/axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, X, Download } from "lucide-react";
 import { ExportButton } from "@/components/shared/ExportButton";
+import { formatDate } from "@/utils";
 
 const articleSchema = z.object({
   title: z.string().min(1, "Заголовок обязателен"),
@@ -39,7 +41,7 @@ export const AdminContent = () => {
       toast.success("Статья создана"); 
       setModalOpen(false); 
     },
-    onError: () => toast.error("Ошибка создания"),
+    onError: mutationOnError("Ошибка создания"),
   });
 
   const updateMutation = useMutation({
@@ -50,7 +52,7 @@ export const AdminContent = () => {
       setModalOpen(false); 
       setEditingArticle(null); 
     },
-    onError: () => toast.error("Ошибка обновления"),
+    onError: mutationOnError("Ошибка обновления"),
   });
 
   const deleteMutation = useMutation({
@@ -59,7 +61,7 @@ export const AdminContent = () => {
       queryClient.invalidateQueries({ queryKey: ["admin-articles"] }); 
       toast.success("Статья удалена"); 
     },
-    onError: () => toast.error("Ошибка удаления"),
+    onError: mutationOnError("Ошибка удаления"),
   });
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ArticleFormData>({
@@ -111,7 +113,7 @@ export const AdminContent = () => {
                     </TableCell>
                     <TableCell><Badge variant="outline">{article.category || "—"}</Badge></TableCell>
                     <TableCell><Badge variant={article.is_published ? "success" : "secondary"}>{article.is_published ? "Опубликована" : "Черновик"}</Badge></TableCell>
-                    <TableCell>{new Date(article.created_at).toLocaleDateString("ru-RU")}</TableCell>
+                    <TableCell>{formatDate(article.created_at)}</TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(article)}><Pencil className="h-4 w-4" /></Button>

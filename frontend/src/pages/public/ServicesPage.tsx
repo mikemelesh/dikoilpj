@@ -5,6 +5,7 @@ import { PriceCalculator } from "@/components/services/PriceCalculator";
 import { apiClient } from "@/api/axios";
 import type { Service, ServiceCategory, Article } from "@/types";
 import { toast } from "react-toastify";
+import { showApiError } from "@/lib/apiError";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/utils";
@@ -33,15 +34,13 @@ export const ServicesPage = () => {
     ])
       .then(([servicesRes, categoriesRes, articlesRes]) => {
         setServices(servicesRes.data.items || []);
-        const cats = Array.from(
-          new Map(
-            (servicesRes.data.items || []).map((s) => [s.category_id, { id: s.category_id, name: s.category?.name || "Другое" }])
-          ).values()
+        const apiCategories = Array.isArray(categoriesRes.data) ? categoriesRes.data : [];
+        setCategories(
+          apiCategories.map((c) => ({ id: c.id, name: c.name }))
         );
-        setCategories(cats);
         setArticles(articlesRes.data.items || []);
       })
-      .catch(() => toast.error("Ошибка загрузки услуг"));
+      .catch((error) => showApiError(error, "Ошибка загрузки услуг"));
   }, []);
 
   return (

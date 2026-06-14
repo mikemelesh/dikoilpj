@@ -1,17 +1,14 @@
 """
 Роутер для калькулятора услуг.
 """
-from datetime import date
 from decimal import Decimal
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models.client import Client
-from ..models.order import OrderStatus
-from ..models.promotion import Promotion, PromotionAppliesTo
 from ..models.service import Service
 from ..schemas.calculator import (
     CalculatedItem,
@@ -19,6 +16,7 @@ from ..schemas.calculator import (
     CalculatorResponse,
     PromotionInfo,
 )
+from ..utils.discounts import calculate_discounts_for_client_order
 
 router = APIRouter(prefix="/calculator", tags=["calculator"])
 
@@ -35,9 +33,9 @@ async def calculate_order(
     - items: список услуг и количества
     - client_id: опционально для применения скидки клиента
     """
-    # Проверяем услуги и считаем сумму
     calculated_items: List[CalculatedItem] = []
     subtotal = Decimal("0.00")
+    service_ids: List[int] = []
     
     for item_req in request.items:
         service = db.query(Service).filter(Service.id == item_req.service_id).first()
@@ -54,6 +52,7 @@ async def calculate_order(
         
         item_total = service.base_price * item_req.quantity
         subtotal += item_total
+        service_ids.append(service.id)
         
         calculated_items.append(CalculatedItem(
             service_id=service.id,
@@ -63,63 +62,36 @@ async def calculate_order(
             total=item_total,
         ))
     
-    # Определяем скидку клиента
-    discount_percent = 0.0
+    client = None
     if request.client_id:
         client = db.query(Client).filter(Client.id == request.client_id).first()
-        if client:
-            discount_percent = client.discount_percent or 0.0
-    
-    # Находим активные акции
-    today = date.today()
-    active_promotions = db.query(Promotion).filter(
-        Promotion.is_active == True,
-        Promotion.start_date <= today,
-        Promotion.end_date >= today,
-    ).all()
-    
-    # Применяем акции (максимальная скидка)
-    max_promo_discount = 0.0
-    promotion_info_list: List[PromotionInfo] = []
-    
-    for promo in active_promotions:
-        applies = False
-        
-        if promo.applies_to == PromotionAppliesTo.ALL:
-            applies = True
-        elif promo.applies_to == PromotionAppliesTo.SERVICE:
-            # Проверяем, есть ли в заказе услуга с target_id
-            for item_req in request.items:
-                if item_req.service_id == promo.target_id:
-                    applies = True
-                    break
-        elif promo.applies_to == PromotionAppliesTo.CATEGORY:
-            # Проверяем категорию услуги
-            for item_req in request.items:
-                service = db.query(Service).filter(Service.id == item_req.service_id).first()
-                if service and service.category_id == promo.target_id:
-                    applies = True
-                    break
-        
-        if applies:
-            promotion_info_list.append(PromotionInfo(
-                id=promo.id,
-                title=promo.title,
-                discount_percent=promo.discount_percent,
-                applies_to=promo.applies_to.value,
-            ))
-            max_promo_discount = max(max_promo_discount, promo.discount_percent)
-    
-    # Используем максимальную скидку (клиент или акция)
-    final_discount_percent = max(discount_percent, max_promo_discount)
-    discount_amount = subtotal * Decimal(str(final_discount_percent)) / Decimal("100")
-    final_price = subtotal - discount_amount
+
+    breakdown = calculate_discounts_for_client_order(
+        db,
+        subtotal,
+        service_ids,
+        client=client,
+    )
+
+    promotion_info_list = [
+        PromotionInfo(
+            id=promo.id,
+            title=promo.title,
+            discount_percent=promo.discount_percent,
+            applies_to=promo.applies_to,
+        )
+        for promo in breakdown.active_promotions
+    ]
     
     return CalculatorResponse(
         items=calculated_items,
         subtotal=subtotal,
-        discount_percent=final_discount_percent,
-        discount_amount=discount_amount,
+        discount_percent=breakdown.discount_percent,
+        discount_amount=breakdown.discount_amount,
+        loyalty_discount_percent=breakdown.loyalty_discount_percent,
+        promotion_discount_percent=breakdown.promotion_discount_percent,
+        discount_source=breakdown.discount_source,
+        applied_promotion_title=breakdown.applied_promotion_title,
         active_promotions=promotion_info_list,
-        final_price=final_price,
+        final_price=breakdown.final_price,
     )

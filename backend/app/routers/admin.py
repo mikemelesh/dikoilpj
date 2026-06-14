@@ -2,17 +2,13 @@
 Роутеры для администрирования.
 """
 import math
-import os
-import subprocess
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from ..config import settings
 from ..database import get_db
 from ..dependencies.auth import get_current_active_user, require_roles
 from ..models.logging import ActionLog
@@ -21,10 +17,17 @@ from ..schemas.secondary import (
     ActionLogListResponse,
     ActionLogResponse,
     BackupResponse,
+    BackupRestoreResponse,
     UserListResponse,
     UserRoleUpdate,
     UserStatusUpdate,
     UserSummaryResponse,
+)
+from ..utils.backup import (
+    create_database_backup,
+    get_backup_dir,
+    resolve_backup_file,
+    restore_database_from_backup,
 )
 from ..utils.security import log_action
 
@@ -359,129 +362,35 @@ async def create_backup(
     Создать дамп базы данных.
     Доступно: admin.
     """
-    import shutil
-    import subprocess
-
-    # Создаём директорию для бэкапов
-    backup_dir = Path(settings.BASE_DIR.parent) / "backups"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-
-    # Генерируем имя файла
+    backup_dir = get_backup_dir()
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"backup_{timestamp}.sql"
     filepath = backup_dir / filename
 
-    # Проверяем наличие pg_dump
-    pg_dump_path = shutil.which("pg_dump")
-    if not pg_dump_path:
-        # Пробуем стандартные пути установки PostgreSQL на Windows
-        possible_paths = [
-            r"C:\Program Files\PostgreSQL\14\bin\pg_dump.exe",
-            r"C:\Program Files\PostgreSQL\15\bin\pg_dump.exe",
-            r"C:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
-        ]
-        for path in possible_paths:
-            if Path(path).exists():
-                pg_dump_path = path
-                break
-
-    if not pg_dump_path:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="pg_dump не найден. Убедитесь, что PostgreSQL установлен и pg_dump доступен в PATH."
-        )
-
-    # Получаем параметры подключения из DSN
-    db_url = settings.SQLALCHEMY_DATABASE_URL
     try:
-        # Парсим DSN (формат: postgresql+psycopg2://user:pass@host:port/dbname)
-        # Удаляем префикс
-        db_url_clean = db_url.replace("postgresql+psycopg://", "").replace("postgresql+psycopg2://", "")
-        
-        # Разделяем user:pass и host:port/dbname
-        if "@" in db_url_clean:
-            user_pass, host_db = db_url_clean.split("@", 1)
-        else:
-            host_db = db_url_clean
-            user_pass = ""
-        
-        # Парсим user:pass
-        if ":" in user_pass:
-            user, password = user_pass.split(":", 1)
-        else:
-            user = user_pass
-            password = ""
-        
-        # Парсим host:port/dbname
-        if "/" in host_db:
-            host_port, dbname = host_db.rsplit("/", 1)
-        else:
-            raise ValueError("Некорректный формат DSN: отсутствует имя базы данных")
-        
-        # Парсим host:port
-        if ":" in host_port:
-            host, port = host_port.rsplit(":", 1)
-        else:
-            host = host_port
-            port = "5432"
-
-        # Формируем команду pg_dump
-        cmd = [
-            pg_dump_path,
-            "-h", host,
-            "-p", port,
-            "-U", user,
-            "-d", dbname,
-            "-F", "p",  # Plain text format
-            "-f", str(filepath),
-        ]
-
-        # Выполняем команду
-        env = os.environ.copy()
-        env["PGPASSWORD"] = password
-
-        result = subprocess.run(
-            cmd,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-
-        if result.returncode != 0:
-            error_detail = result.stderr or result.stdout or "Неизвестная ошибка"
-            # Логируем полную ошибку для отладки
-            print(f"Backup error: {error_detail}")
-            print(f"Command: {' '.join(cmd)}")
-            print(f"Host: {host}, Port: {port}, User: {user}, DB: {dbname}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Ошибка pg_dump: {error_detail}"
-            )
-
-        log_action(
-            db=db,
-            user_id=str(current_user.id),
-            action_type="create_backup",
-            entity_type="backup",
-            entity_id=filename,
-            description=f"Создан бэкап БД: {filename}",
-        )
-
-        return BackupResponse(
-            filename=filename,
-            size=filepath.stat().st_size,
-            created_at=datetime.now(timezone.utc),
-        )
-
+        create_database_backup(filepath)
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Unexpected backup error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при создании бэкапа: {str(e)}"
-        )
+            detail=f"Ошибка при создании бэкапа: {str(e)}",
+        ) from e
+
+    log_action(
+        db=db,
+        user_id=str(current_user.id),
+        action_type="create_backup",
+        entity_type="backup",
+        entity_id=filename,
+        description=f"Создан бэкап БД: {filename}",
+    )
+
+    return BackupResponse(
+        filename=filename,
+        size=filepath.stat().st_size,
+        created_at=datetime.now(timezone.utc),
+    )
 
 
 @router.get("/backups", response_model=list[BackupResponse])
@@ -493,9 +402,7 @@ async def get_backups(
     Получить список всех бэкапов.
     Доступно: admin.
     """
-    backup_dir = Path(settings.BASE_DIR.parent) / "backups"
-    backup_dir.mkdir(parents=True, exist_ok=True)
-
+    backup_dir = get_backup_dir()
     backups = []
     for file in backup_dir.glob("backup_*.sql"):
         stat = file.stat()
@@ -510,6 +417,58 @@ async def get_backups(
     return sorted(backups, key=lambda x: x.created_at, reverse=True)
 
 
+@router.post("/backups/{filename}/restore", response_model=BackupRestoreResponse)
+async def restore_backup(
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"])),
+):
+    """
+    Восстановить базу данных из выбранного бэкапа.
+    Текущие данные будут полностью заменены.
+    Доступно: admin.
+    """
+    from ..database import SessionLocal, engine
+
+    filepath = resolve_backup_file(filename)
+    user_id = str(current_user.id)
+
+    db.close()
+    engine.dispose()
+
+    try:
+        restore_database_from_backup(filepath)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при восстановлении: {str(e)}",
+        ) from e
+
+    restored_at = datetime.now(timezone.utc)
+
+    new_db = SessionLocal()
+    try:
+        log_action(
+            db=new_db,
+            user_id=user_id,
+            action_type="restore_backup",
+            entity_type="backup",
+            entity_id=filename,
+            description=f"Восстановление БД из бэкапа: {filename}",
+        )
+        new_db.commit()
+    finally:
+        new_db.close()
+
+    return BackupRestoreResponse(
+        filename=filename,
+        message="База данных успешно восстановлена из резервной копии",
+        restored_at=restored_at,
+    )
+
+
 @router.get("/backups/{filename}")
 async def download_backup(
     filename: str,
@@ -522,23 +481,7 @@ async def download_backup(
     """
     from fastapi.responses import FileResponse
 
-    backup_dir = Path(settings.BASE_DIR.parent) / "backups"
-    filepath = backup_dir / filename
-
-    if not filepath.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Бэкап не найден"
-        )
-
-    # Проверяем что файл находится в директории бэкапов (защита от path traversal)
-    try:
-        filepath.resolve().relative_to(backup_dir.resolve())
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Некорректное имя файла"
-        )
+    filepath = resolve_backup_file(filename)
 
     return FileResponse(
         path=str(filepath),

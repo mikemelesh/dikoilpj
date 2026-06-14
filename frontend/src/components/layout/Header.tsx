@@ -8,6 +8,8 @@ import { cn } from "@/utils";
 import { Menu, User, LogOut, ChevronDown, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ClientDiscountInfo } from "@/components/client/ClientDiscountInfo";
+import { PUBLIC_NAV_ITEMS } from "@/components/layout/PublicHeader";
 
 // =============================================================================
 // Компонент Header
@@ -64,7 +66,12 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
       <div className="flex items-center gap-4">
         {isAuthenticated && user ? (
           <div className="flex items-center gap-1">
-            {user.role === "client" && <NotificationBell />}
+            {user.role === "client" && (
+              <>
+                <ClientDiscountInfo variant="compact" />
+                <NotificationBell />
+              </>
+            )}
           <div className="relative">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -111,21 +118,15 @@ export const Header = ({ onMenuClick }: HeaderProps) => {
           </div>
         ) : (
           <nav className="hidden md:flex items-center gap-6">
-            <Link to="/services" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Услуги
-            </Link>
-            <Link to="/calculator" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Калькулятор
-            </Link>
-            <Link to="/portfolio" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Портфолио
-            </Link>
-            <Link to="/articles" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Статьи
-            </Link>
-            <Link to="/faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              FAQ
-            </Link>
+            {PUBLIC_NAV_ITEMS.map((item) => (
+              <Link
+                key={item.path}
+                to={item.path}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
         )}
 

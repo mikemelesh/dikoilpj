@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Users, Package, TrendingUp, MessageSquare, Star, Download } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/shared/ExportButton";
+import { formatDate, formatDateTime } from "@/utils";
 
 interface OrderAnalytics { total: number; by_status: Record<string, number>; by_priority: Record<string, number>; avg_completion_days?: number }
 interface RevenueAnalytics { total: number; by_period: { date: string; amount: number }[]; by_service_category: { category_id: number; category_name: string; total: number }[] }
@@ -30,7 +31,7 @@ export const AdminDashboard = () => {
 
   // Данные для графика (последние 30 дней)
   const chartData = revenueAnalytics?.by_period?.slice(-30).map((d) => ({
-    date: new Date(d.date).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }),
+    date: formatDate(d.date),
     amount: d.amount,
   })) || [];
 
@@ -139,7 +140,7 @@ export const AdminDashboard = () => {
               <TableBody>
                 {logs.items.map((log) => (
                   <TableRow key={log.id}>
-                    <TableCell className="text-sm">{new Date(log.created_at).toLocaleString("ru-RU")}</TableCell>
+                    <TableCell className="text-sm">{formatDateTime(log.created_at)}</TableCell>
                     <TableCell>{log.user_email || "Система"}</TableCell>
                     <TableCell><Badge variant="outline">{log.action_type}</Badge></TableCell>
                     <TableCell className="text-sm text-muted-foreground">{log.description || "—"}</TableCell>
@@ -178,7 +179,7 @@ export const AdminDashboard = () => {
                           <Star key={i} className={`h-4 w-4 ${i < review.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
                         ))}
                       </div>
-                      <span className="text-sm text-muted-foreground">{new Date(review.created_at).toLocaleDateString("ru-RU")}</span>
+                      <span className="text-sm text-muted-foreground">{formatDate(review.created_at)}</span>
                     </div>
                     <p className="font-medium">{review.client_name || "Аноним"}</p>
                     {review.text && <p className="text-sm text-muted-foreground line-clamp-2">{review.text}</p>}

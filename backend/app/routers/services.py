@@ -12,7 +12,9 @@ from ..database import get_db
 from ..dependencies.auth import get_current_active_user, require_roles
 from ..models.service import Service, ServiceCategory
 from ..models.user import User
+from ..constants.service_categories import PREDEFINED_CATEGORY_NAMES
 from ..schemas.service import (
+    ServiceCategoryBrief,
     ServiceCategoryCreate,
     ServiceCategoryResponse,
     ServiceCategoryUpdate,
@@ -21,8 +23,43 @@ from ..schemas.service import (
     ServiceResponse,
     ServiceUpdate,
 )
+from ..utils.service_categories import ensure_predefined_categories
 
 router = APIRouter(prefix="/services", tags=["services"])
+
+
+def _service_to_response(service: Service) -> ServiceResponse:
+    category = service.category
+    return ServiceResponse(
+        id=service.id,
+        category_id=service.category_id,
+        category_name=category.name if category else None,
+        category=ServiceCategoryBrief(id=category.id, name=category.name) if category else None,
+        name=service.name,
+        description=service.description,
+        base_price=service.base_price,
+        unit=service.unit,
+        duration_days=service.duration_days,
+        is_active=service.is_active,
+        created_at=service.created_at,
+        updated_at=service.updated_at,
+    )
+
+
+def _validate_category_id(db: Session, category_id: int) -> ServiceCategory:
+    ensure_predefined_categories(db)
+    category = db.query(ServiceCategory).filter(ServiceCategory.id == category_id).first()
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Категория не найдена",
+        )
+    if category.name not in PREDEFINED_CATEGORY_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Допустимы только предопределённые категории услуг",
+        )
+    return category
 
 
 # =============================================================================
@@ -36,10 +73,13 @@ async def get_categories(
     active_only: bool = Query(True, description="Только активные категории"),
 ):
     """
-    Получить список всех категорий услуг.
+    Получить список предопределённых категорий услуг.
     Публичный эндпоинт.
     """
-    query = db.query(ServiceCategory)
+    ensure_predefined_categories(db)
+    query = db.query(ServiceCategory).filter(
+        ServiceCategory.name.in_(PREDEFINED_CATEGORY_NAMES)
+    )
     if active_only:
         query = query.filter(ServiceCategory.is_active == True)
     query = query.order_by(ServiceCategory.sort_order, ServiceCategory.name)
@@ -197,22 +237,7 @@ async def get_services(
     offset = (page - 1) * limit
     services = query.offset(offset).limit(limit).all()
 
-    # Формируем ответ
-    items = []
-    for service in services:
-        items.append(ServiceResponse(
-            id=service.id,
-            category_id=service.category_id,
-            category_name=service.category.name if service.category else None,
-            name=service.name,
-            description=service.description,
-            base_price=service.base_price,
-            unit=service.unit,
-            duration_days=service.duration_days,
-            is_active=service.is_active,
-            created_at=service.created_at,
-            updated_at=service.updated_at,
-        ))
+    items = [_service_to_response(service) for service in services]
 
     return ServiceListResponse(
         items=items,
@@ -239,19 +264,7 @@ async def get_service(
             detail="Услуга не найдена"
         )
 
-    return ServiceResponse(
-        id=service.id,
-        category_id=service.category_id,
-        category_name=service.category.name if service.category else None,
-        name=service.name,
-        description=service.description,
-        base_price=service.base_price,
-        unit=service.unit,
-        duration_days=service.duration_days,
-        is_active=service.is_active,
-        created_at=service.created_at,
-        updated_at=service.updated_at,
-    )
+    return _service_to_response(service)
 
 
 @router.post("", response_model=ServiceResponse, status_code=status.HTTP_201_CREATED)
@@ -264,34 +277,15 @@ async def create_service(
     Создать новую услугу.
     Доступно: manager, admin.
     """
-    # Проверка существования категории
-    category = db.query(ServiceCategory).filter(
-        ServiceCategory.id == service.category_id
-    ).first()
-    if not category:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Категория не найдена"
-        )
+    category = _validate_category_id(db, service.category_id)
 
     db_service = Service(**service.model_dump())
     db.add(db_service)
     db.commit()
     db.refresh(db_service)
+    db_service.category = category
 
-    return ServiceResponse(
-        id=db_service.id,
-        category_id=db_service.category_id,
-        category_name=category.name,
-        name=db_service.name,
-        description=db_service.description,
-        base_price=db_service.base_price,
-        unit=db_service.unit,
-        duration_days=db_service.duration_days,
-        is_active=db_service.is_active,
-        created_at=db_service.created_at,
-        updated_at=db_service.updated_at,
-    )
+    return _service_to_response(db_service)
 
 
 @router.put("/{service_id}", response_model=ServiceResponse)
@@ -316,36 +310,22 @@ async def update_service(
 
     update_data = service.model_dump(exclude_unset=True)
 
-    # Если меняется категория, проверяем её существование
     if "category_id" in update_data:
-        category = db.query(ServiceCategory).filter(
-            ServiceCategory.id == update_data["category_id"]
-        ).first()
-        if not category:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Категория не найдена"
-            )
+        _validate_category_id(db, update_data["category_id"])
 
     for field, value in update_data.items():
         setattr(db_service, field, value)
 
     db.commit()
     db.refresh(db_service)
-
-    return ServiceResponse(
-        id=db_service.id,
-        category_id=db_service.category_id,
-        category_name=db_service.category.name if db_service.category else None,
-        name=db_service.name,
-        description=db_service.description,
-        base_price=db_service.base_price,
-        unit=db_service.unit,
-        duration_days=db_service.duration_days,
-        is_active=db_service.is_active,
-        created_at=db_service.created_at,
-        updated_at=db_service.updated_at,
+    db_service = (
+        db.query(Service)
+        .options(joinedload(Service.category))
+        .filter(Service.id == service_id)
+        .first()
     )
+
+    return _service_to_response(db_service)
 
 
 @router.delete("/{service_id}", status_code=status.HTTP_204_NO_CONTENT)

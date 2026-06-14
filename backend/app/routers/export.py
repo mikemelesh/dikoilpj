@@ -3,6 +3,7 @@
 """
 from datetime import date as date_type
 from datetime import datetime, time
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -17,6 +18,7 @@ from ..models.material import Material
 from ..models.technician import Technician
 from ..models.user import User, UserRole
 from ..utils.export import generate_docx, generate_excel
+from ..utils.export_labels import build_export_rows, filters_for_report, report_meta_for_export
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -24,15 +26,38 @@ EXPORT_MAX_ROWS = 5000
 VALID_STATUSES = ["new", "confirmed", "in_progress", "review", "completed", "cancelled", "archived"]
 VALID_PRIORITIES = ["normal", "urgent", "critical"]
 
-FILTER_LABELS_RU = {
-    "date_from": "Дата создания от",
-    "date_to": "Дата создания до",
-    "status": "Статус",
-    "priority": "Приоритет",
-    "client_id": "ID клиента",
-    "technician_id": "ID техника",
-    "search": "Поиск",
-}
+ORDER_COLUMNS = [
+    "order_number", "status", "priority", "client_name", "technician_name", "manager_name",
+    "total_price", "discount_amount", "final_price", "deadline", "created_at",
+]
+GANTT_COLUMNS = [
+    "order_number", "status", "priority", "client_name", "technician_name", "manager_name",
+    "deadline", "created_at",
+]
+CLIENT_SUMMARY_COLUMNS = [
+    "client_name", "clinic_name", "email", "total_orders", "completed_orders", "active_orders",
+    "total_paid", "avg_order_value", "earliest_deadline", "latest_deadline", "created_at",
+]
+TECH_SUMMARY_COLUMNS = [
+    "technician_name", "specialization", "email", "total_orders", "completed_orders", "active_orders",
+    "total_earned", "avg_order_value", "earliest_deadline", "latest_deadline", "created_at",
+]
+CLIENT_LIST_COLUMNS = [
+    "last_name", "first_name", "clinic_name", "email", "phone", "address",
+    "loyalty_tier", "discount_percent", "loyalty_points", "total_orders", "created_at",
+]
+TECHNICIAN_LIST_COLUMNS = [
+    "last_name", "first_name", "specialization", "email", "phone", "experience_years",
+    "rating", "completed_orders", "is_available", "created_at",
+]
+MATERIAL_COLUMNS = [
+    "material_name", "technician_name", "quantity_requested", "status", "comment", "created_at",
+]
+TECH_ORDER_COLUMNS = ORDER_COLUMNS + ["completed_at"]
+USER_COLUMNS = ["last_name", "first_name", "email", "role", "is_active", "created_at", "updated_at"]
+FAQ_COLUMNS = ["sort_order", "category", "question", "answer", "is_published", "created_at"]
+REVIEW_COLUMNS = ["client_name", "order_id", "rating", "text", "is_moderated", "is_published", "created_at"]
+ARTICLE_COLUMNS = ["title", "category", "slug", "is_published", "created_at", "updated_at"]
 
 
 def _parse_date_range(date_from: Optional[date_type], date_to: Optional[date_type]) -> Dict[str, Any]:
@@ -43,14 +68,27 @@ def _parse_date_range(date_from: Optional[date_type], date_to: Optional[date_typ
 
 
 def _filters_for_report(**kwargs: Any) -> Dict[str, Any]:
-    """Человекочитаемые подписи фильтров в шапке отчёта."""
-    result: Dict[str, Any] = {}
-    for key, value in kwargs.items():
-        if value is None or value == "" or value == []:
-            continue
-        label = FILTER_LABELS_RU.get(key, key)
-        result[label] = value
-    return result
+    return filters_for_report(**kwargs)
+
+
+def _creator_display_name(user: User) -> str:
+    name = f"{user.first_name} {user.last_name}".strip()
+    return name or user.email or "—"
+
+
+def _report_meta(user: User) -> Dict[str, str]:
+    return report_meta_for_export(_creator_display_name(user))
+
+
+def _export_response(blob: BytesIO, media_type: str, filename: str) -> Response:
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+
+
+def _manager_name(order: Order) -> Optional[str]:
+    if order.manager:
+        return f"{order.manager.first_name} {order.manager.last_name}".strip()
+    return None
 
 
 def _normalize_status_filter(
@@ -244,9 +282,7 @@ async def export_orders(
         if o.technician and o.technician.user:
             technician_name = f"{o.technician.user.first_name} {o.technician.user.last_name}"
 
-        manager_name = None
-        if o.manager and getattr(o.manager, "user", None):
-            manager_name = f"{o.manager.user.first_name} {o.manager.user.last_name}"
+        manager_name = _manager_name(o)
 
         rows.append(
             {
@@ -259,23 +295,33 @@ async def export_orders(
                 "total_price": float(o.total_price) if o.total_price is not None else 0,
                 "discount_amount": float(o.discount_amount) if o.discount_amount is not None else 0,
                 "final_price": float(o.final_price) if o.final_price is not None else 0,
-                "deadline": o.deadline.isoformat() if o.deadline else None,
-                "created_at": o.created_at.isoformat() if o.created_at else None,
+                "deadline": o.deadline,
+                "created_at": o.created_at,
             }
         )
 
+    export_rows = build_export_rows(rows, ORDER_COLUMNS)
     report_title = "Журнал заказов"
     if format == "excel":
-        blob = generate_excel(rows, title=report_title, filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         filename = "zhurnal_zakazov.xlsx"
     else:
-        blob = generate_docx(rows, title=report_title, filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         filename = "zhurnal_zakazov.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/clients", response_model=None, response_class=Response)
@@ -300,7 +346,7 @@ async def export_clients(
             detail="Экспорт клиентов доступен только manager/admin",
         )
 
-    filters_for_report: Dict[str, Any] = {}
+    filters_for_report = _filters_for_report()
 
     query = db.query(Client).join(Client.user).options(joinedload(Client.user))
     total = query.count()
@@ -323,20 +369,31 @@ async def export_clients(
                 "discount_percent": c.discount_percent,
                 "loyalty_points": c.user.loyalty_points if c.user else None,
                 "total_orders": c.total_orders,
+                "created_at": c.user.created_at if c.user else None,
             }
         )
 
+    export_rows = build_export_rows(rows, CLIENT_LIST_COLUMNS)
     if format == "excel":
-        blob = generate_excel(rows, title="Отчёт по клиентам", filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title="Отчёт по клиентам",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = "clients_report.xlsx"
+        filename = "otchet_klienty.xlsx"
     else:
-        blob = generate_docx(rows, title="Отчёт по клиентам", filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title="Отчёт по клиентам",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        filename = "clients_report.docx"
+        filename = "otchet_klienty.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/technicians", response_model=None, response_class=Response)
@@ -357,7 +414,7 @@ async def export_technicians(
     """
     format = _require_format(format)
 
-    filters_for_report: Dict[str, Any] = {"available_only": available_only}
+    filters_for_report = _filters_for_report(available_only=available_only)
 
     if current_user.role == UserRole.CLIENT:
         raise HTTPException(
@@ -388,20 +445,31 @@ async def export_technicians(
                 "rating": t.rating,
                 "completed_orders": t.completed_orders,
                 "is_available": t.is_available,
+                "created_at": t.user.created_at if t.user else None,
             }
         )
 
+    export_rows = build_export_rows(rows, TECHNICIAN_LIST_COLUMNS)
     if format == "excel":
-        blob = generate_excel(rows, title="Отчёт по сотрудникам", filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title="Отчёт по сотрудникам",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = "technicians_report.xlsx"
+        filename = "otchet_sotrudniki.xlsx"
     else:
-        blob = generate_docx(rows, title="Отчёт по сотрудникам", filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title="Отчёт по сотрудникам",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        filename = "technicians_report.docx"
+        filename = "otchet_sotrudniki.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/materials", response_model=None, response_class=Response)
@@ -420,10 +488,10 @@ async def export_material_requests(
     """
     format = _require_format(format)
 
-    filters_for_report = {
+    filters_for_report = _filters_for_report(
         **_parse_date_range(date_from, date_to),
-        "status": status,
-    }
+        status=status,
+    )
 
     valid_material_statuses = {"pending", "approved", "rejected", "issued"}
     if status and status not in valid_material_statuses:
@@ -458,26 +526,36 @@ async def export_material_requests(
 
         rows.append(
             {
-                "technician_name": technician_name,
                 "material_name": r.material.name if r.material else None,
+                "technician_name": technician_name,
                 "quantity_requested": float(r.quantity_requested) if r.quantity_requested is not None else 0,
                 "status": getattr(r.status, "value", r.status),
                 "comment": r.comment,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_at": r.created_at,
             }
         )
 
+    export_rows = build_export_rows(rows, MATERIAL_COLUMNS)
     if format == "excel":
-        blob = generate_excel(rows, title="Отчёт по материалам", filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title="Отчёт по материалам",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = "materials_report.xlsx"
+        filename = "otchet_materialy.xlsx"
     else:
-        blob = generate_docx(rows, title="Отчёт по материалам", filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title="Отчёт по материалам",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        filename = "materials_report.docx"
+        filename = "otchet_materialy.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/gantt", response_model=None, response_class=Response)
@@ -537,10 +615,7 @@ async def export_gantt(
         if o.technician and o.technician.user:
             technician_name = f"{o.technician.user.first_name} {o.technician.user.last_name}"
 
-        manager_name = None
-        if o.manager:
-            # manager is a User model (first/last name)
-            manager_name = f"{o.manager.first_name} {o.manager.last_name}"
+        manager_name = _manager_name(o)
 
         rows.append(
             {
@@ -550,23 +625,33 @@ async def export_gantt(
                 "client_name": client_name,
                 "technician_name": technician_name,
                 "manager_name": manager_name,
-                "deadline": o.deadline.isoformat() if o.deadline else None,
-                "created_at": o.created_at.isoformat() if o.created_at else None,
+                "deadline": o.deadline,
+                "created_at": o.created_at,
             }
         )
 
+    export_rows = build_export_rows(rows, GANTT_COLUMNS)
     report_title = "График сроков выполнения заказов"
     if format == "excel":
-        blob = generate_excel(rows, title=report_title, filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         filename = "grafik_srokov.xlsx"
     else:
-        blob = generate_docx(rows, title=report_title, filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         filename = "grafik_srokov.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/orders-by-client", response_model=None, response_class=Response)
@@ -634,6 +719,7 @@ async def export_orders_by_client(
                 "avg_order_value": 0.0,
                 "earliest_deadline": None,
                 "latest_deadline": None,
+                "earliest_created_at": None,
                 "orders_count": 0,
                 "completed_orders": 0,
                 "active_orders": 0,
@@ -641,14 +727,20 @@ async def export_orders_by_client(
             }
         
         client_data = client_orders_map[client_id]
+        if o.created_at:
+            if (
+                not client_data["earliest_created_at"]
+                or o.created_at < client_data["earliest_created_at"]
+            ):
+                client_data["earliest_created_at"] = o.created_at
         client_data["total_orders"] += 1
         client_data["total_paid"] += float(o.final_price) if o.final_price is not None else 0
         client_data["orders_count"] += 1
         
         # Track order statuses
-        if o.status == OrderStatus.COMPLETED:
+        if o.status in (OrderStatus.COMPLETED, OrderStatus.ARCHIVED):
             client_data["completed_orders"] += 1
-        else:
+        elif o.status != OrderStatus.CANCELLED:
             client_data["active_orders"] += 1
         
         # Track deadlines
@@ -689,27 +781,38 @@ async def export_orders_by_client(
             "clinic_name": client_data["clinic_name"],
             "email": client_data["email"],
             "total_orders": client_data["orders_count"],
-            "total_paid": client_data["total_paid"],
-            "avg_order_value": round(client_data["avg_order_value"], 2),
             "completed_orders": client_data["completed_orders"],
             "active_orders": client_data["active_orders"],
-            "earliest_deadline": client_data["earliest_deadline"].isoformat() if client_data["earliest_deadline"] else None,
-            "latest_deadline": client_data["latest_deadline"].isoformat() if client_data["latest_deadline"] else None,
+            "total_paid": client_data["total_paid"],
+            "avg_order_value": round(client_data["avg_order_value"], 2),
+            "earliest_deadline": client_data["earliest_deadline"],
+            "latest_deadline": client_data["latest_deadline"],
+            "created_at": client_data["earliest_created_at"],
         }
         rows.append(row)
 
+    export_rows = build_export_rows(rows, CLIENT_SUMMARY_COLUMNS)
     report_title = "Сводка заказов по клиентам"
     if format == "excel":
-        blob = generate_excel(rows, title=report_title, filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         filename = "zakazy_po_klientam.xlsx"
     else:
-        blob = generate_docx(rows, title=report_title, filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         filename = "zakazy_po_klientam.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/orders-by-technician", response_model=None, response_class=Response)
@@ -776,6 +879,7 @@ async def export_orders_by_technician(
                 "avg_order_value": 0.0,
                 "earliest_deadline": None,
                 "latest_deadline": None,
+                "earliest_created_at": None,
                 "orders_count": 0,
                 "completed_orders": 0,
                 "active_orders": 0,
@@ -786,14 +890,20 @@ async def export_orders_by_technician(
             continue
         
         tech_data = tech_orders_map[tech_id]
+        if o.created_at:
+            if (
+                not tech_data["earliest_created_at"]
+                or o.created_at < tech_data["earliest_created_at"]
+            ):
+                tech_data["earliest_created_at"] = o.created_at
         tech_data["total_orders"] += 1
         tech_data["total_earned"] += float(o.final_price) if o.final_price is not None else 0
         tech_data["orders_count"] += 1
         
         # Track order statuses
-        if o.status == OrderStatus.COMPLETED:
+        if o.status in (OrderStatus.COMPLETED, OrderStatus.ARCHIVED):
             tech_data["completed_orders"] += 1
-        else:
+        elif o.status != OrderStatus.CANCELLED:
             tech_data["active_orders"] += 1
         
         # Track deadlines
@@ -834,27 +944,38 @@ async def export_orders_by_technician(
             "specialization": tech_data["specialization"],
             "email": tech_data["email"],
             "total_orders": tech_data["orders_count"],
-            "total_earned": tech_data["total_earned"],
-            "avg_order_value": round(tech_data["avg_order_value"], 2),
             "completed_orders": tech_data["completed_orders"],
             "active_orders": tech_data["active_orders"],
-            "earliest_deadline": tech_data["earliest_deadline"].isoformat() if tech_data["earliest_deadline"] else None,
-            "latest_deadline": tech_data["latest_deadline"].isoformat() if tech_data["latest_deadline"] else None,
+            "total_earned": tech_data["total_earned"],
+            "avg_order_value": round(tech_data["avg_order_value"], 2),
+            "earliest_deadline": tech_data["earliest_deadline"],
+            "latest_deadline": tech_data["latest_deadline"],
+            "created_at": tech_data["earliest_created_at"],
         }
         rows.append(row)
 
+    export_rows = build_export_rows(rows, TECH_SUMMARY_COLUMNS)
     report_title = "Сводка заказов по исполнителям"
     if format == "excel":
-        blob = generate_excel(rows, title=report_title, filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         filename = "zakazy_po_ispolnitelyam.xlsx"
     else:
-        blob = generate_docx(rows, title=report_title, filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         filename = "zakazy_po_ispolnitelyam.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/technician-orders", response_model=None, response_class=Response)
@@ -922,9 +1043,7 @@ async def export_technician_orders(
         if o.technician and o.technician.user:
             technician_name = f"{o.technician.user.first_name} {o.technician.user.last_name}"
 
-        manager_name = None
-        if o.manager:
-            manager_name = f"{o.manager.first_name} {o.manager.last_name}"
+        manager_name = _manager_name(o)
 
         rows.append(
             {
@@ -937,24 +1056,34 @@ async def export_technician_orders(
                 "total_price": float(o.total_price) if o.total_price is not None else 0,
                 "discount_amount": float(o.discount_amount) if o.discount_amount is not None else 0,
                 "final_price": float(o.final_price) if o.final_price is not None else 0,
-                "deadline": o.deadline.isoformat() if o.deadline else None,
-                "created_at": o.created_at.isoformat() if o.created_at else None,
-                "completed_at": o.completed_at.isoformat() if o.completed_at else None,
+                "deadline": o.deadline,
+                "created_at": o.created_at,
+                "completed_at": o.completed_at,
             }
         )
 
+    export_rows = build_export_rows(rows, TECH_ORDER_COLUMNS)
     report_title = "Мои заказы — выгрузка"
     if format == "excel":
-        blob = generate_excel(rows, title=report_title, filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         filename = "moi_zakazy.xlsx"
     else:
-        blob = generate_docx(rows, title=report_title, filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title=report_title,
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         filename = "moi_zakazy.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/users", response_model=None, response_class=Response)
@@ -973,10 +1102,7 @@ async def export_users(
     """
     format = _require_format(format)
 
-    filters_for_report = {
-        "role": role,
-        "is_active": is_active,
-    }
+    filters_for_report = _filters_for_report(role=role, is_active=is_active)
 
     query = db.query(User)
 
@@ -996,27 +1122,36 @@ async def export_users(
             {
                 "id": u.id,
                 "email": u.email,
-                "first_name": u.first_name,
                 "last_name": u.last_name,
-                "role": u.role.value if hasattr(u.role, 'value') else u.role,
+                "first_name": u.first_name,
+                "role": u.role.value if hasattr(u.role, "value") else u.role,
                 "is_active": u.is_active,
-                "created_at": u.created_at.isoformat() if u.created_at else None,
-                "updated_at": u.updated_at.isoformat() if u.updated_at else None,
-                "last_login": u.last_login.isoformat() if u.last_login else None,
+                "created_at": u.created_at,
+                "updated_at": u.updated_at,
             }
         )
 
+    export_rows = build_export_rows(rows, USER_COLUMNS)
     if format == "excel":
-        blob = generate_excel(rows, title="Пользователи системы", filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title="Пользователи системы",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = "users_report.xlsx"
+        filename = "polzovateli.xlsx"
     else:
-        blob = generate_docx(rows, title="Пользователи системы", filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title="Пользователи системы",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        filename = "users_report.docx"
+        filename = "polzovateli.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/faqs", response_model=None, response_class=Response)
@@ -1033,7 +1168,7 @@ async def export_faqs(
     """
     format = _require_format(format)
 
-    filters_for_report = {}
+    filters_for_report = _filters_for_report()
 
     from ..models.faq import Faq
     query = db.query(Faq)
@@ -1052,22 +1187,32 @@ async def export_faqs(
                 "category": f.category,
                 "sort_order": f.sort_order,
                 "is_published": f.is_published,
-                "created_at": f.created_at.isoformat() if f.created_at else None,
-                "updated_at": f.updated_at.isoformat() if f.updated_at else None,
+                "created_at": f.created_at,
+                "updated_at": f.updated_at,
             }
         )
 
+    export_rows = build_export_rows(rows, FAQ_COLUMNS)
     if format == "excel":
-        blob = generate_excel(rows, title="ЧаВо", filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title="Часто задаваемые вопросы",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = "faqs_report.xlsx"
+        filename = "chavo.xlsx"
     else:
-        blob = generate_docx(rows, title="ЧаВо", filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title="Часто задаваемые вопросы",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        filename = "faqs_report.docx"
+        filename = "chavo.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/reviews", response_model=None, response_class=Response)
@@ -1086,10 +1231,7 @@ async def export_reviews(
     """
     format = _require_format(format)
 
-    filters_for_report = {
-        "is_published": is_published,
-        "is_moderated": is_moderated,
-    }
+    filters_for_report = _filters_for_report(is_published=is_published, is_moderated=is_moderated)
 
     from ..models.review import Review
     query = db.query(Review).options(joinedload(Review.client).joinedload(Client.user))
@@ -1113,29 +1255,37 @@ async def export_reviews(
 
         rows.append(
             {
-                "id": r.id,
                 "client_name": client_name,
                 "order_id": r.order_id,
                 "rating": r.rating,
                 "text": r.text,
                 "is_moderated": r.is_moderated,
                 "is_published": r.is_published,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-                # Note: Review model doesn't have updated_at field
+                "created_at": r.created_at,
             }
         )
 
+    export_rows = build_export_rows(rows, REVIEW_COLUMNS)
     if format == "excel":
-        blob = generate_excel(rows, title="Отзывы", filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title="Отзывы клиентов",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = "reviews_report.xlsx"
+        filename = "otzyvy.xlsx"
     else:
-        blob = generate_docx(rows, title="Отзывы", filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title="Отзывы клиентов",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        filename = "reviews_report.docx"
+        filename = "otzyvy.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)
 
 
 @router.get("/articles", response_model=None, response_class=Response)
@@ -1154,10 +1304,7 @@ async def export_articles(
     """
     format = _require_format(format)
 
-    filters_for_report = {
-        "is_published": is_published,
-        "category": category,
-    }
+    filters_for_report = _filters_for_report(is_published=is_published, category=category)
 
     from ..models.article import Article
     query = db.query(Article)
@@ -1176,24 +1323,33 @@ async def export_articles(
     for a in articles:
         rows.append(
             {
-                "id": a.id,
                 "title": a.title,
-                "slug": a.slug,
                 "category": a.category,
+                "slug": a.slug,
                 "is_published": a.is_published,
-                "created_at": a.created_at.isoformat() if a.created_at else None,
-                "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+                "created_at": a.created_at,
+                "updated_at": a.updated_at,
             }
         )
 
+    export_rows = build_export_rows(rows, ARTICLE_COLUMNS)
     if format == "excel":
-        blob = generate_excel(rows, title="Статьи", filters=filters_for_report)
+        blob = generate_excel(
+            export_rows,
+            title="Статьи",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        filename = "articles_report.xlsx"
+        filename = "stati.xlsx"
     else:
-        blob = generate_docx(rows, title="Статьи", filters=filters_for_report)
+        blob = generate_docx(
+            export_rows,
+            title="Статьи",
+            filters=filters_for_report,
+            report_meta=_report_meta(current_user),
+        )
         media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        filename = "articles_report.docx"
+        filename = "stati.docx"
 
-    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
-    return Response(content=blob.getvalue(), media_type=media_type, headers=headers)
+    return _export_response(blob, media_type, filename)

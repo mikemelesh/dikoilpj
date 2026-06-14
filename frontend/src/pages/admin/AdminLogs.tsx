@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Download, Search } from "lucide-react";
+import { formatDateTime } from "@/utils";
 
 interface ActionLog { id: number; user_id?: string; user_email?: string; action_type: string; entity_type: string; entity_id?: string; description?: string; ip_address?: string; created_at: string }
 
@@ -39,7 +40,7 @@ export const AdminLogs = () => {
     if (!data?.items?.length) { toast.error("Нет данных для экспорта"); return; }
     const headers = ["ID", "Дата", "Пользователь", "Действие", "Сущность", "ID сущности", "Описание", "IP"];
     const rows = data.items.map((log) => [
-      log.id, new Date(log.created_at).toLocaleString("ru-RU"), log.user_email || "Система", log.action_type, log.entity_type, log.entity_id || "—", log.description || "—", log.ip_address || "—",
+      log.id, formatDateTime(log.created_at), log.user_email || "Система", log.action_type, log.entity_type, log.entity_id || "—", log.description || "—", log.ip_address || "—",
     ]);
     const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -135,7 +136,7 @@ export const AdminLogs = () => {
                 <TableBody>
                   {logs.map((log) => (
                     <TableRow key={log.id}>
-                      <TableCell className="text-sm">{new Date(log.created_at).toLocaleString("ru-RU")}</TableCell>
+                      <TableCell className="text-sm">{formatDateTime(log.created_at)}</TableCell>
                       <TableCell>{log.user_email || "Система"}</TableCell>
                       <TableCell><Badge variant="outline">{log.action_type}</Badge></TableCell>
                       <TableCell>{log.entity_type}</TableCell>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
+import { mutationOnError } from "@/lib/apiError";
 import { apiClient } from "@/api/axios";
 import { useAuthStore } from "@/stores/authStore";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { X } from "lucide-react";
 import { ExportButton } from "@/components/shared/ExportButton";
+import { formatDate } from "@/utils";
 
 interface User {
   id: string;
@@ -99,7 +101,7 @@ export const ManagerUsers = () => {
       toast.success("Роль изменена");
       setEditModal({ user: null, open: false, role: "client", is_active: true });
     },
-    onError: () => toast.error("Ошибка изменения роли"),
+    onError: mutationOnError("Ошибка изменения роли"),
   });
 
   const statusMutation = useMutation({
@@ -110,7 +112,7 @@ export const ManagerUsers = () => {
       toast.success("Статус изменён");
       setEditModal({ user: null, open: false, role: "client", is_active: true });
     },
-    onError: () => toast.error("Ошибка изменения статуса"),
+    onError: mutationOnError("Ошибка изменения статуса"),
   });
 
   const handleSave = () => {
@@ -257,7 +259,7 @@ export const ManagerUsers = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {new Date(user.created_at).toLocaleDateString("ru-RU")}
+                        {formatDate(user.created_at)}
                       </TableCell>
                       <TableCell>
                         <Button

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Edit, Trash2, FileText } from "lucide-react";
+import { formatDate } from "@/utils";
 
 interface OrderTemplate {
   id: number;
@@ -128,7 +129,7 @@ export const ClientTemplates = () => {
                 <TableRow key={template.id}>
                   <TableCell>{template.name}</TableCell>
                   <TableCell>{template.items.length}</TableCell>
-                  <TableCell>{new Date(template.created_at).toLocaleDateString("ru-RU")}</TableCell>
+                  <TableCell>{formatDate(template.created_at)}</TableCell>
                   <TableCell className="space-x-2">
                     <Button variant="ghost" size="icon" onClick={() => openEditDialog(template)}>
                       <Edit className="h-4 w-4" />

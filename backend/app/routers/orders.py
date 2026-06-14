@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import and_, case, func, or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
@@ -39,7 +39,8 @@ from ..schemas.order import (
     OrderUpdate,
 )
 from ..utils.files import save_file, validate_file
-from ..utils.loyalty import apply_client_discount, update_client_loyalty
+from ..utils.loyalty import update_client_loyalty
+from ..utils.discounts import calculate_discounts_for_client_order
 from ..utils.security import log_action
 from ..utils.notifications import create_order_status_notification
 
@@ -51,36 +52,7 @@ router = APIRouter(prefix="/orders", tags=["orders"])
 # =============================================================================
 
 
-def _orders_list_order_by(query):
-    """Срочные и просроченные дедлайны / critical — в начале списка."""
-    today = date.today()
-    terminal_statuses = [
-        OrderStatus.COMPLETED,
-        OrderStatus.CANCELLED,
-        OrderStatus.ARCHIVED,
-    ]
-    overdue_rank = case(
-        (
-            and_(
-                Order.deadline.isnot(None),
-                Order.deadline < today,
-                Order.status.notin_(terminal_statuses),
-            ),
-            0,
-        ),
-        else_=1,
-    )
-    priority_rank = case(
-        (Order.priority == OrderPriority.CRITICAL, 0),
-        (Order.priority == OrderPriority.URGENT, 1),
-        else_=2,
-    )
-    return query.order_by(
-        overdue_rank,
-        priority_rank,
-        Order.deadline.asc().nullslast(),
-        Order.created_at.desc(),
-    )
+from ..utils.order_sort import orders_list_order_by as _orders_list_order_by
 
 
 def generate_order_number() -> str:
@@ -445,8 +417,11 @@ async def create_order(
             "specifications": item_data.specifications,
         })
 
-    # Применяем скидку клиента
-    discount_amount, final_price, _ = apply_client_discount(total_price, client)
+    # Применяем скидку клиента и акции
+    service_ids = [item_data["service_id"] for item_data in order_items_data]
+    breakdown = calculate_discounts_for_client_order(db, total_price, service_ids, client=client)
+    discount_amount = breakdown.discount_amount
+    final_price = breakdown.final_price
 
     # Создаём заказ
     order = Order(
@@ -641,19 +616,45 @@ async def manager_update_order_pricing(
         order.total_price = sum((i.total_price for i in order.items), Decimal("0"))
 
     client = order.client
-    if pricing_data.discount_amount is not None:
-        order.discount_amount = Decimal(str(pricing_data.discount_amount))
-    elif pricing_data.items and client:
-        order.discount_amount, order.final_price, _ = apply_client_discount(order.total_price, client)
+    total = order.total_price
 
-    if pricing_data.final_price is not None:
-        order.final_price = Decimal(str(pricing_data.final_price))
-        if pricing_data.discount_amount is None:
-            order.discount_amount = max(order.total_price - order.final_price, Decimal("0"))
-    elif client and pricing_data.discount_amount is None and not pricing_data.items:
-        order.discount_amount, order.final_price, _ = apply_client_discount(order.total_price, client)
+    if (
+        pricing_data.items
+        and pricing_data.discount_amount is None
+        and pricing_data.final_price is None
+        and client
+    ):
+        service_ids = [item.service_id for item in order.items]
+        breakdown = calculate_discounts_for_client_order(
+            db,
+            total,
+            service_ids,
+            client=client,
+        )
+        order.discount_amount = breakdown.discount_amount
+        order.final_price = breakdown.final_price
+    elif pricing_data.discount_amount is not None:
+        discount = Decimal(str(pricing_data.discount_amount))
+        discount = min(max(discount, Decimal("0")), total)
+        order.discount_amount = discount
+        order.final_price = total - discount
+    elif pricing_data.final_price is not None:
+        final = Decimal(str(pricing_data.final_price))
+        final = min(max(final, Decimal("0")), total)
+        order.final_price = final
+        order.discount_amount = total - final
+    elif client:
+        service_ids = [item.service_id for item in order.items]
+        breakdown = calculate_discounts_for_client_order(
+            db,
+            total,
+            service_ids,
+            client=client,
+        )
+        order.discount_amount = breakdown.discount_amount
+        order.final_price = breakdown.final_price
     else:
-        order.final_price = max(order.total_price - order.discount_amount, Decimal("0"))
+        order.final_price = max(total - order.discount_amount, Decimal("0"))
 
     if pricing_data.notes is not None:
         order.notes = pricing_data.notes
@@ -725,6 +726,25 @@ async def update_order_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Недопустимый переход статуса: {old_status} → {new_status}"
         )
+
+    if current_user.role == UserRole.TECHNICIAN:
+        technician_profile = db.query(Technician).filter(
+            Technician.user_id == current_user.id
+        ).first()
+        if not technician_profile or order.technician_id != technician_profile.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Доступ запрещён",
+            )
+        technician_allowed = {
+            OrderStatus.IN_PROGRESS: [OrderStatus.REVIEW],
+            OrderStatus.REVIEW: [OrderStatus.IN_PROGRESS],
+        }
+        if new_status_enum not in technician_allowed.get(old_status_enum, []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Только менеджер может менять этот статус заказа",
+            )
 
     # Обновляем статус
     order.status = new_status
@@ -803,14 +823,53 @@ async def assign_technician(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Техник не найден"
         )
-    if not technician.is_available:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Техник недоступен"
-        )
+
+    from ..utils.technician_load import assert_technician_can_take_order
+
+    if order.technician_id != assign_data.technician_id:
+        try:
+            assert_technician_can_take_order(
+                db,
+                assign_data.technician_id,
+                exclude_order_id=str(order.id),
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
 
     old_technician_id = order.technician_id
+    old_status = order.status
     order.technician_id = assign_data.technician_id
+
+    tech_user = technician.user
+    tech_label = (
+        f"{tech_user.first_name} {tech_user.last_name}".strip()
+        if tech_user
+        else "исполнитель"
+    )
+
+    if order.status in (OrderStatus.NEW, OrderStatus.CONFIRMED):
+        order.status = OrderStatus.IN_PROGRESS
+        create_status_history(
+            db=db,
+            order=order,
+            old_status=old_status,
+            new_status=OrderStatus.IN_PROGRESS,
+            changed_by=current_user,
+            comment=f"Назначен исполнитель: {tech_label}",
+        )
+        if order.client and order.client.user_id:
+            create_order_status_notification(
+                db,
+                recipient_id=str(order.client.user_id),
+                order_id=str(order.id),
+                order_number=order.order_number,
+                old_status=old_status.value if hasattr(old_status, "value") else str(old_status),
+                new_status=OrderStatus.IN_PROGRESS.value,
+                sender_id=str(current_user.id),
+            )
 
     db.commit()
     db.refresh(order)
@@ -821,7 +880,7 @@ async def assign_technician(
         action_type="assign_technician",
         entity_type="order",
         entity_id=str(order.id),
-        description=f"Назначен техник {technician.user.first_name} {technician.user.last_name}",
+        description=f"Назначен техник {tech_label}",
     )
 
     return get_order_response(db, order)

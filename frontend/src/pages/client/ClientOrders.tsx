@@ -12,38 +12,101 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Clock } from "lucide-react";
 import type { Order } from "@/types";
+import { formatDate } from "@/utils";
+
+type OrderSortField = "created_at" | "deadline" | "order_number" | "final_price" | "priority";
 
 export const ClientOrders = () => {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Record<string, string | string[]>>({});
-  const [sortBy, setSortBy] = useState<string>("created_at");
+  const [sortBy, setSortBy] = useState<OrderSortField>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const limit = 10;
 
+  const toggleSort = (next: OrderSortField) => {
+    if (next === sortBy) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(next);
+      setSortDir("asc");
+    }
+  };
+
   const { data, isLoading } = useQuery({
-    queryKey: ["client-orders", page, search, filters, sortBy, sortDir],
+    queryKey: ["client-orders", page, search, filters],
     queryFn: () => getOrders({
       page,
       limit,
       status: (filters.status as string[]) || undefined,
       date_from: filters.date_from as string,
       date_to: filters.date_to as string,
-      sort_by: sortBy,
-      sort_dir: sortDir,
     }),
     ...clientOrdersQueryOptions,
   });
 
-  const onChangeSortBy = (value: string) => {
-    setSortBy(value);
-    setPage(1);
-  };
+  const orders = (data?.items ?? []) as Array<
+    Order & {
+      created_at?: string | null;
+      deadline?: string | null;
+      final_price?: number | string | null;
+      priority?: string | null;
+    }
+  >;
 
-  const toggleSortDir = () => {
-    setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    setPage(1);
-  };
+  const sortedOrders = (() => {
+    const items = [...orders];
+    const dir = sortDir === "asc" ? 1 : -1;
+
+    const toDateTs = (v: unknown) => {
+      if (!v) return null;
+      const t = new Date(v as string).getTime();
+      return Number.isFinite(t) ? t : null;
+    };
+
+    const toNum = (v: unknown) => {
+      const n = typeof v === "number" ? v : Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const toStr = (v: unknown) => (v === null || v === undefined ? "" : String(v));
+
+    const priorityRank: Record<string, number> = { critical: 0, urgent: 1, normal: 2 };
+
+    const getVal = (o: (typeof orders)[number]) => {
+      switch (sortBy) {
+        case "created_at":
+          return toDateTs(o.created_at);
+        case "deadline":
+          return toDateTs(o.deadline);
+        case "order_number":
+          return toStr(o.order_number);
+        case "final_price":
+          return toNum(o.final_price);
+        case "priority":
+          return priorityRank[o.priority ?? ""] ?? 999;
+        default:
+          return null;
+      }
+    };
+
+    return items.sort((a, b) => {
+      const va = getVal(a);
+      const vb = getVal(b);
+
+      const aNull = va === null || va === undefined;
+      const bNull = vb === null || vb === undefined;
+      if (aNull && bNull) return 0;
+      if (aNull) return 1;
+      if (bNull) return -1;
+
+      if (typeof va === "number" && typeof vb === "number") {
+        return (va - vb) * dir;
+      }
+
+      return toStr(va).localeCompare(toStr(vb), "ru") * dir;
+    });
+  })();
 
   const filterConfigs: FilterConfig[] = [
     {
@@ -93,34 +156,6 @@ export const ClientOrders = () => {
         searchPlaceholder="Поиск по номеру заказа..."
       />
 
-      <Card>
-        <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="text-sm text-muted-foreground">
-            Сортировка
-          </div>
-
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-muted-foreground">Поле</label>
-            <select
-              value={sortBy}
-              onChange={(e) => onChangeSortBy(e.target.value)}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="created_at">Создан</option>
-              <option value="deadline">Дедлайн</option>
-              <option value="order_number">Номер</option>
-              <option value="status">Статус</option>
-              <option value="priority">Приоритет</option>
-              <option value="final_price">Сумма</option>
-            </select>
-
-            <Button variant="outline" size="sm" onClick={toggleSortDir}>
-              {sortDir === "asc" ? "↑" : "↓"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       {isLoading ? (
         <div className="space-y-4">
           {[...Array(5)].map((_, i) => (
@@ -131,7 +166,7 @@ export const ClientOrders = () => {
             </Card>
           ))}
         </div>
-      ) : !data?.items.length ? (
+      ) : !orders.length ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <p>Заказы не найдены</p>
@@ -143,7 +178,56 @@ export const ClientOrders = () => {
       ) : (
         <>
           <div className="space-y-4">
-            {data.items.map((order) => (
+            <div className="flex flex-wrap gap-3 items-center">
+              <span className="text-sm font-medium text-muted-foreground">Сортировка:</span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleSort("created_at")}
+                className="gap-2"
+              >
+                Дата создания{sortBy === "created_at" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleSort("deadline")}
+                className="gap-2"
+              >
+                Дедлайн{sortBy === "deadline" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleSort("order_number")}
+                className="gap-2"
+              >
+                Номер заказа{sortBy === "order_number" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleSort("final_price")}
+                className="gap-2"
+              >
+                Сумма{sortBy === "final_price" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleSort("priority")}
+                className="gap-2"
+              >
+                Приоритет{sortBy === "priority" ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+              </Button>
+            </div>
+
+            {sortedOrders.map((order) => (
               <Link key={order.id} to={`/client/orders/${order.id}`}>
                 <Card className="transition-shadow hover:shadow-md cursor-pointer">
                   <CardContent className="py-4">
@@ -153,11 +237,11 @@ export const ClientOrders = () => {
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="h-3 w-3" />
                           {order.deadline
-                            ? `Дедлайн: ${new Date(order.deadline).toLocaleDateString("ru-RU")}`
+                            ? `Дедлайн: ${formatDate(order.deadline)}`
                             : "Без дедлайна"}
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Создан: {new Date(order.created_at).toLocaleDateString("ru-RU")}
+                          Создан: {formatDate(order.created_at)}
                         </p>
                       </div>
                       <div className="flex items-center gap-4">
