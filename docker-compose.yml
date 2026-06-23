@@ -31,21 +31,21 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres123@db:5432/dental_lab
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-change-in-production}
-      JWT_ALGORITHM: HS256
+      SQLALCHEMY_DATABASE_URL: postgresql+psycopg://postgres:postgres123@db:5432/dental_lab
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
-      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost:80"]'
       UPLOAD_DIR: /app/uploads
     depends_on:
       db:
         condition: service_healthy
-    command: >
-      sh -c "python -c "from app.database import engine, Base; Base.metadata.create_all(bind=engine)" &&
-             alembic upgrade head &&
-             python -m app.seed_data_fixed &&
-             uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+    command:
+      - sh
+      - -c
+      - |
+        alembic upgrade head
+        python -m app.seed_data_fixed
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   # Frontend (React + Vite) - Development
   frontend:
