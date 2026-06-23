@@ -1,11 +1,11 @@
-"""add order_templates table"""
+"""ensure order_templates exists (repair empty d2eff6493d07 on deployed DBs)"""
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "d2eff6493d07"
-down_revision = "236f64c8447c"
+revision = "f8a2b1c90d11"
+down_revision = "177977aba067"
 branch_labels = None
 depends_on = None
 

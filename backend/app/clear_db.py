@@ -5,36 +5,34 @@
 from pathlib import Path
 
 from dotenv import load_dotenv
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 from .database import SessionLocal, engine, Base
 
-TRUNCATE_TABLES = """
-TRUNCATE TABLE
-    notifications,
-    action_logs,
-    order_status_history,
-    order_items,
-    order_files,
-    material_requests,
-    reviews,
-    order_templates,
-    orders,
-    clients,
-    technicians,
-    materials,
-    services,
-    service_categories,
-    articles,
-    knowledge_base,
-    faqs,
-    promotions,
-    users
-RESTART IDENTITY CASCADE
-"""
+TRUNCATE_TABLE_NAMES = (
+    "notifications",
+    "action_logs",
+    "order_status_history",
+    "order_items",
+    "order_files",
+    "material_requests",
+    "reviews",
+    "order_templates",
+    "orders",
+    "clients",
+    "technicians",
+    "materials",
+    "services",
+    "service_categories",
+    "articles",
+    "knowledge_base",
+    "faqs",
+    "promotions",
+    "users",
+)
 
 
 def flush_all_data(db=None):
@@ -43,7 +41,13 @@ def flush_all_data(db=None):
     if own_session:
         db = SessionLocal()
     try:
-        db.execute(text(TRUNCATE_TABLES))
+        existing = set(inspect(engine).get_table_names())
+        tables = [name for name in TRUNCATE_TABLE_NAMES if name in existing]
+        if not tables:
+            print("⚠️  Нет таблиц для очистки")
+            return
+        sql = f"TRUNCATE TABLE {', '.join(tables)} RESTART IDENTITY CASCADE"
+        db.execute(text(sql))
         db.commit()
         print("✅ Все данные удалены")
     except Exception:
