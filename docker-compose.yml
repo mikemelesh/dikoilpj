@@ -43,9 +43,10 @@ services:
       - sh
       - -c
       - |
+        set -e
         alembic upgrade head
         python -m app.seed_data_fixed
-        uvicorn app.main:app --host 0.0.0.0 --port 8000
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   # Frontend (React + Vite) - Development
   frontend:
