@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Package, Clock, AlertCircle, TrendingUp, Check, User, X } from "lucide-react";
 import type { Order } from "@/types";
-import { formatDate } from "@/utils";
+import { formatDate, getMaterialRequestLabel } from "@/utils";
 
 export const ManagerDashboard = () => {
   const queryClient = useQueryClient();
@@ -265,9 +265,9 @@ export const ManagerDashboard = () => {
               {pendingRequests.map((req) => (
                 <div key={req.id} className="flex flex-wrap items-center justify-between gap-4 p-4 border rounded-lg">
                   <div>
-                    <p className="font-medium">{req.material?.name || `Материал #${req.material_id}`}</p>
+                    <p className="font-medium">{getMaterialRequestLabel(req)}</p>
                     <p className="text-sm text-muted-foreground">
-                      {req.quantity_requested} {req.material?.unit || "шт"} • {req.technician?.user?.first_name} {req.technician?.user?.last_name}
+                      {req.quantity_requested} {req.material?.unit || "шт"} • {req.technician_name || `${req.technician?.user?.first_name ?? ""} ${req.technician?.user?.last_name ?? ""}`.trim() || "Техник"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

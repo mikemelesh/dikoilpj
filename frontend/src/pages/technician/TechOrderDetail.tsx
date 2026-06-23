@@ -19,7 +19,7 @@ import { FileUpload } from "@/components/shared/FileUpload";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Download, Trash2, Eye, FileText } from "lucide-react";
 import { API_BASE_URL } from "@/api/axios";
-import { formatDate, formatDateTime } from "@/utils";
+import { formatDate, formatDateTime, getOrderItemServiceLabel } from "@/utils";
 
 // Схема для комментария
 const statusChangeSchema = z.object({
@@ -165,7 +165,7 @@ export const TechOrderDetail = () => {
             <TableBody>
               {order.items?.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.service?.name || `Услуга #${item.service_id}`}</TableCell>
+                  <TableCell>{getOrderItemServiceLabel(item)}</TableCell>
                   <TableCell className="text-right">{item.quantity}</TableCell>
                   <TableCell className="text-right">
                     {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(item.unit_price))}

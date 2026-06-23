@@ -59,6 +59,7 @@ import { ClientDashboard } from "@/pages/client/DashboardPage";
 import { ClientOrders } from "@/pages/client/ClientOrders";
 import { ClientOrderDetail } from "@/pages/client/ClientOrderDetail";
 import { ClientNewOrder } from "@/pages/client/ClientNewOrder";
+import { ClientTemplates } from "@/pages/client/ClientTemplates";
 import { ClientArchive } from "@/pages/client/ClientArchive";
 import { ClientProfile } from "@/pages/client/ClientProfile";
 
@@ -226,6 +227,7 @@ const ClientRoutes = () => (
     <Route index element={<ClientDashboard />} />
     <Route path="orders" element={<ClientOrders />} />
     <Route path="orders/new" element={<ClientNewOrder />} />
+    <Route path="templates" element={<ClientTemplates />} />
     <Route path="orders/:id" element={<ClientOrderDetail />} />
     <Route path="archive" element={<ClientArchive />} />
     <Route path="profile" element={<ClientProfile />} />

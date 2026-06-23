@@ -131,7 +131,7 @@ def get_order_response(db: Session, order: Order) -> OrderResponse:
             "created_at": h.created_at,
             "changed_by": str(h.changed_by),
         }
-        for h in order.status_history
+        for h in sorted(order.status_history, key=lambda x: x.created_at)
     ]
 
     return OrderResponse(
@@ -386,6 +386,12 @@ async def create_order(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Профиль клиента не найден"
+        )
+
+    if not order_data.items:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Заказ пуст: добавьте хотя бы одну услугу",
         )
 
     # Проверяем услуги и считаем сумму

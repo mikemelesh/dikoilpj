@@ -159,12 +159,21 @@ export const PriceCalculator = ({ services }: PriceCalculatorProps) => {
       return;
     }
 
-    // Сохранение данных в localStorage для передачи на страницу создания заказа
-    const orderData = {
-      items: rows.filter((r) => r.service_id > 0).map((r) => ({
+    const validItems = rows
+      .filter((r) => r.service_id > 0)
+      .map((r) => ({
         service_id: r.service_id,
         quantity: r.quantity,
-      })),
+      }));
+
+    if (validItems.length === 0) {
+      toast.error("Заказ пуст: выберите хотя бы одну услугу");
+      return;
+    }
+
+    // Сохранение данных в localStorage для передачи на страницу создания заказа
+    const orderData = {
+      items: validItems,
       calculatedTotal: finalPrice,
     };
 

@@ -20,7 +20,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ArrowLeft, Download, Trash2, Star, Eye, FileText } from "lucide-react";
 import type { Order, OrderFile } from "@/types";
 import { API_BASE_URL } from "@/api/axios";
-import { formatDate, formatDateTime } from "@/utils";
+import { formatDate, formatDateTime, getOrderItemServiceLabel } from "@/utils";
+
+const SYSTEM_STATUS_COMMENTS = new Set(["Заказ создан"]);
+
+function getLabMessages(history: Order["status_history"]) {
+  if (!history?.length) return [];
+  return history.filter(
+    (entry) => entry.comment && !SYSTEM_STATUS_COMMENTS.has(entry.comment)
+  );
+}
 
 // =============================================================================
 // Компонент ClientOrderDetail
@@ -111,6 +120,8 @@ export const ClientOrderDetail = () => {
   }
   if (!order) return <div className="p-8 text-center">Заказ не найден</div>;
 
+  const labMessages = getLabMessages(order.status_history);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -144,6 +155,25 @@ export const ClientOrderDetail = () => {
         </CardContent>
       </Card>
 
+      {labMessages.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Сообщения от лаборатории</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[...labMessages].reverse().map((entry) => (
+              <div key={entry.id} className="rounded-lg border bg-muted/30 p-4 text-sm">
+                <p className="whitespace-pre-wrap">{entry.comment}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {formatDateTime(entry.created_at)}
+                  {entry.new_status === "confirmed" ? " · Подтверждение заказа" : ""}
+                </p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Состав заказа */}
       <Card>
         <CardHeader>
@@ -162,7 +192,7 @@ export const ClientOrderDetail = () => {
             <TableBody>
               {order.items?.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.service?.name || `Услуга #${item.service_id}`}</TableCell>
+                  <TableCell>{getOrderItemServiceLabel(item)}</TableCell>
                   <TableCell className="text-right">{item.quantity}</TableCell>
                   <TableCell className="text-right">
                     {new Intl.NumberFormat("ru-RU", { style: "currency", currency: "BYN", minimumFractionDigits: 2 }).format(Number(item.unit_price))}
@@ -291,7 +321,6 @@ export const ClientOrderDetail = () => {
         </DialogContent>
       </Dialog>
 
-      {/* История статусов */}
       {order.status_history && order.status_history.length > 0 && (
         <Card>
           <CardHeader>
@@ -311,7 +340,7 @@ export const ClientOrderDetail = () => {
                   <TableRow key={h.id}>
                     <TableCell>{formatDateTime(h.created_at)}</TableCell>
                     <TableCell><StatusBadge status={h.new_status} /></TableCell>
-                    <TableCell>{h.comment || "—"}</TableCell>
+                    <TableCell className="whitespace-pre-wrap">{h.comment || "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -19,6 +19,7 @@ import {
   discountFromFinal,
   finalFromDiscount,
   formatOrderMoney,
+  getOrderSubtotal,
   roundMoney,
 } from "@/utils/orderPricing";
 import {
@@ -67,10 +68,11 @@ export const ManagerConfirmOrderDialog = ({
     );
   }, [order, open]);
 
-  const subtotal = order ? Number(order.total_price) : 0;
+  const subtotal = order ? getOrderSubtotal(order) : 0;
 
   const handleFinalPriceChange = (value: string) => {
     setFinalPrice(value);
+    if (!Number.isFinite(subtotal)) return;
     const parsed = parseFloat(value);
     if (!Number.isNaN(parsed)) {
       setDiscountAmount(String(discountFromFinal(subtotal, parsed)));
@@ -79,6 +81,7 @@ export const ManagerConfirmOrderDialog = ({
 
   const handleDiscountChange = (value: string) => {
     setDiscountAmount(value);
+    if (!Number.isFinite(subtotal)) return;
     const parsed = parseFloat(value);
     if (!Number.isNaN(parsed)) {
       setFinalPrice(String(finalFromDiscount(subtotal, parsed)));
@@ -103,12 +106,19 @@ export const ManagerConfirmOrderDialog = ({
         final_price: roundMoney(price),
         discount_amount: roundMoney(discount),
       });
+      const managerComment = message.trim() || "Заказ подтверждён менеджером";
       if (technicianId) {
+        if (order.status === "new") {
+          await updateOrderStatus(order.id, {
+            new_status: "confirmed",
+            comment: managerComment,
+          });
+        }
         await assignTechnician(order.id, Number(technicianId));
       } else {
         await updateOrderStatus(order.id, {
           new_status: "confirmed",
-          comment: message.trim() || "Заказ подтверждён менеджером",
+          comment: managerComment,
         });
       }
     },
@@ -149,6 +159,12 @@ export const ManagerConfirmOrderDialog = ({
         </DialogHeader>
 
         <div className="space-y-4">
+          {order.notes?.trim() && (
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <p className="text-xs font-medium text-muted-foreground">Примечания клиента</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{order.notes}</p>
+            </div>
+          )}
           <p className="text-sm text-muted-foreground">
             Сумма без скидки: <strong>{formatOrderMoney(subtotal)}</strong>
           </p>

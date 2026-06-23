@@ -13,7 +13,7 @@ import { X } from "lucide-react";
 import { ExportButton } from "../../components/shared/ExportButton";
 import { SearchAndFilter, type FilterConfig } from "../../components/shared/SearchAndFilter";
 import { toExportFilters } from "@/lib/exportFilters";
-import { formatDate } from "@/utils";
+import { formatDate, getOrderItemServiceLabel } from "@/utils";
 
 // Преобразование статуса в прогресс
 const statusToProgress = (status: string): number => {
@@ -226,7 +226,7 @@ export const ManagerGantt = () => {
                 <ul className="space-y-1 text-sm">
                   {selectedOrderData.items.map((item: any) => (
                     <li key={item.id} className="flex justify-between">
-                      <span>{item.service?.name || `Услуга #${item.service_id}`}</span>
+                      <span>{getOrderItemServiceLabel(item)}</span>
                       <span>{item.quantity} шт</span>
                     </li>
                   ))}

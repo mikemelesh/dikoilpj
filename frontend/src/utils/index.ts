@@ -5,7 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export { formatDate, formatDateTime } from "./formatters";
+export {
+  formatDate,
+  formatDateTime,
+  getMaterialRequestLabel,
+  getOrderItemServiceLabel,
+} from "./formatters";
 
 export function formatPrice(price: number): string {
   return new Intl.NumberFormat('ru-RU', {

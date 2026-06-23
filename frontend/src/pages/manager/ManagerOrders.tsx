@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "react-toastify";
 import { mutationOnError } from "@/lib/apiError";
 
-import { getOrders, assignTechnician, updateOrderStatus } from "@/api/orders";
+import { getOrders, getOrder, assignTechnician, updateOrderStatus } from "@/api/orders";
 import { TechnicianSelectOptions } from "@/components/manager/TechnicianSelectOptions";
 import { getTechnicians } from "@/api/manager";
 import { SearchAndFilter, type FilterConfig } from "@/components/shared/SearchAndFilter";
@@ -221,13 +221,7 @@ export const ManagerOrders = () => {
   });
 
   const openConfirm = async (orderId: string) => {
-    const full = orders.find((o) => o.id === orderId);
-    if (full) {
-      setConfirmOrder(full as Order);
-      return;
-    }
     try {
-      const { getOrder } = await import("@/api/orders");
       const o = await getOrder(orderId);
       setConfirmOrder(o);
     } catch {

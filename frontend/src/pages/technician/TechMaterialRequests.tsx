@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus } from "lucide-react";
-import { formatDate } from "@/utils";
+import { formatDate, getMaterialRequestLabel } from "@/utils";
 
 // Схема заявки
 const requestSchema = z.object({
@@ -89,7 +89,7 @@ export const TechMaterialRequests = () => {
               <TableBody>
                 {requests.map((req) => (
                   <TableRow key={req.id}>
-                    <TableCell>{req.material?.name || `Материал #${req.material_id}`}</TableCell>
+                    <TableCell>{getMaterialRequestLabel(req)}</TableCell>
                     <TableCell className="text-right">
                       {req.quantity_requested} {req.material?.unit || "шт"}
                     </TableCell>

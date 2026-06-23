@@ -19,7 +19,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDate } from "@/utils";
 
 const emptyItem = (): OrderTemplateItem => ({ service_id: 0, quantity: 1 });
@@ -190,19 +189,18 @@ export const ManagerTemplates = () => {
         <CardContent>
           <div className="max-w-md">
             <Label>Клиент</Label>
-            <Select value={clientFilter || "all"} onValueChange={(value) => setClientFilter(value === "all" ? "" : value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Все клиенты" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Все клиенты</SelectItem>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={String(client.id)}>
-                    {clientLabel(client.id)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              value={clientFilter}
+              onChange={(event) => setClientFilter(event.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">Все клиенты</option>
+              {clients.map((client) => (
+                <option key={client.id} value={String(client.id)}>
+                  {clientLabel(client.id)}
+                </option>
+              ))}
+            </select>
           </div>
         </CardContent>
       </Card>
@@ -264,23 +262,26 @@ export const ManagerTemplates = () => {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label>Клиент *</Label>
-                  <Select
-                    value={formData.client_id ? String(formData.client_id) : ""}
-                    onValueChange={(value) => setFormData((prev) => ({ ...prev, client_id: Number(value) }))}
+                  <Label htmlFor="template-client">Клиент *</Label>
+                  <select
+                    id="template-client"
+                    value={formData.client_id || ""}
+                    onChange={(event) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        client_id: event.target.value ? Number(event.target.value) : 0,
+                      }))
+                    }
                     disabled={Boolean(editingTemplate)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Выберите клиента" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={String(client.id)}>
-                          {clientLabel(client.id)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <option value="">Выберите клиента</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={String(client.id)}>
+                        {clientLabel(client.id)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -302,21 +303,22 @@ export const ManagerTemplates = () => {
                     <div key={index} className="grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-2 items-end">
                       <div>
                         <Label className="text-xs text-muted-foreground">Услуга</Label>
-                        <Select
-                          value={item.service_id ? String(item.service_id) : ""}
-                          onValueChange={(value) => updateItem(index, { service_id: Number(value) })}
+                        <select
+                          value={item.service_id || ""}
+                          onChange={(event) =>
+                            updateItem(index, {
+                              service_id: event.target.value ? Number(event.target.value) : 0,
+                            })
+                          }
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                         >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Выберите услугу" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {services.map((service) => (
-                              <SelectItem key={service.id} value={String(service.id)}>
-                                {service.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <option value="">Выберите услугу</option>
+                          {services.map((service) => (
+                            <option key={service.id} value={String(service.id)}>
+                              {service.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <Label className="text-xs text-muted-foreground">Кол-во</Label>

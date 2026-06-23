@@ -40,6 +40,7 @@ const MENU_CONFIG: Record<string, MenuItem[]> = {
     { label: "Дашборд", path: "/client", icon: LayoutDashboard },
     { label: "Мои заказы", path: "/client/orders", icon: ClipboardList },
     { label: "Новый заказ", path: "/client/orders/new", icon: PackagePlus },
+    { label: "Шаблоны заказов", path: "/client/templates", icon: FileBox },
     { label: "Архив", path: "/client/archive", icon: Archive },
     { label: "Профиль", path: "/client/profile", icon: User },
     { label: "Главная", path: "/", icon: LayoutDashboard },

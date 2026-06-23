@@ -23,7 +23,7 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { OrderStatusTracker } from "@/components/orders/OrderStatusTracker";
 import { ArrowLeft, User } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { cn, formatDate, formatDateTime } from "@/utils";
+import { cn, formatDate, formatDateTime, getOrderItemServiceLabel } from "@/utils";
 import {
   discountFromFinal,
   finalFromDiscount,
@@ -266,6 +266,17 @@ export const ManagerOrderDetail = () => {
         </Card>
       )}
 
+      {order.notes?.trim() && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Примечания клиента</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="whitespace-pre-wrap text-sm">{order.notes}</p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Позиции заказа</CardTitle>
@@ -283,7 +294,7 @@ export const ManagerOrderDetail = () => {
             <TableBody>
               {order.items?.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.service_name ?? `Услуга #${item.service_id}`}</TableCell>
+                  <TableCell>{getOrderItemServiceLabel(item)}</TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{formatOrderMoney(item.unit_price)}</TableCell>
                   <TableCell>{formatOrderMoney(item.total_price)}</TableCell>

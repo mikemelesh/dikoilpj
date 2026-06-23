@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertCircle, Check, X, Package } from "lucide-react";
-import { formatDate } from "@/utils";
+import { formatDate, getMaterialRequestLabel } from "@/utils";
 
 export const ManagerMaterials = () => {
   const queryClient = useQueryClient();
@@ -77,11 +77,17 @@ export const ManagerMaterials = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pendingRequests.map((request) => (
+                {pendingRequests.map((request) => {
+                  const materialUnit =
+                    request.material?.unit ||
+                    materials.find((m) => m.id === request.material_id)?.unit ||
+                    "шт";
+
+                  return (
                   <TableRow key={request.id}>
-                    <TableCell>{request.technician?.user?.first_name} {request.technician?.user?.last_name}</TableCell>
-                    <TableCell>{request.material?.name}</TableCell>
-                    <TableCell>{request.quantity_requested} {request.material?.unit}</TableCell>
+                    <TableCell>{request.technician_name || `${request.technician?.user?.first_name ?? ""} ${request.technician?.user?.last_name ?? ""}`.trim() || "—"}</TableCell>
+                    <TableCell>{getMaterialRequestLabel(request)}</TableCell>
+                    <TableCell>{request.quantity_requested} {materialUnit}</TableCell>
                     <TableCell className="max-w-xs truncate">{request.comment || "—"}</TableCell>
                     <TableCell>{formatDate(request.created_at)}</TableCell>
                     <TableCell>
@@ -103,7 +109,8 @@ export const ManagerMaterials = () => {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>

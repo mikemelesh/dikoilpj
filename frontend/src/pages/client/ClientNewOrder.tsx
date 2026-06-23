@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { toast } from "react-toastify";
 import { mutationOnError, showApiError } from "@/lib/apiError";
 
 import { createOrder, uploadFile } from "@/api/orders";
+import { getTemplates, type OrderTemplate } from "@/api/templates";
 import { apiClient } from "@/api/axios";
 import { authStore } from "@/stores/authStore";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -27,20 +28,31 @@ import { OrderDiscountSummary } from "@/components/client/OrderDiscountSummary";
 // =============================================================================
 
 const orderSchema = z.object({
-  items: z.array(z.object({
-    service_id: z.number(),
-    quantity: z.number().min(1, "Минимум 1"),
-    specifications: z.record(z.string()).optional(),
-  })).min(1, "Добавьте хотя бы одну услугу"),
+  items: z
+    .array(
+      z.object({
+        service_id: z.number(),
+        quantity: z.number().min(1, "Минимум 1"),
+        specifications: z.record(z.string()).optional(),
+      })
+    )
+    .min(1, "Заказ пуст: добавьте хотя бы одну услугу")
+    .superRefine((items, ctx) => {
+      if (!items.some((item) => item.service_id > 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Заказ пуст: выберите хотя бы одну услугу",
+        });
+      }
+    }),
   notes: z.string().max(2000).optional(),
   deadline: z.string().optional(),
   priority: z.enum(["normal", "urgent", "critical"]).default("normal"),
-}).refine((data) => data.items.some((item) => item.service_id > 0), {
-  message: "Выберите хотя бы одну услугу",
-  path: ["items"],
 });
 
 type OrderFormData = z.infer<typeof orderSchema>;
+
+const EMPTY_ORDER_MESSAGE = "Заказ пуст: выберите хотя бы одну услугу";
 
 // =============================================================================
 // Компонент ClientNewOrder
@@ -48,6 +60,7 @@ type OrderFormData = z.infer<typeof orderSchema>;
 
 export const ClientNewOrder = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = authStore();
   const [step, setStep] = useState(1);
   const clientId = user?.client_profile?.id;
@@ -61,8 +74,9 @@ export const ClientNewOrder = () => {
   const [promotionTitle, setPromotionTitle] = useState<string | null>(null);
   const [finalPrice, setFinalPrice] = useState<number>(0);
   const [files, setFiles] = useState<File[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
-  const { reset, register, control, handleSubmit, watch, formState: { errors } } = useForm<OrderFormData>({
+  const { reset, register, control, handleSubmit, watch, trigger, formState: { errors } } = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
       items: [{ service_id: 0, quantity: 1, specifications: {} }],
@@ -72,8 +86,40 @@ export const ClientNewOrder = () => {
     },
   });
 
-  // Загрузка данных из localStorage (из калькулятора)
+  const applyTemplateToForm = (template: OrderTemplate) => {
+    const validItems = template.items
+      .filter((item) => item.service_id > 0)
+      .map((item) => ({
+        service_id: item.service_id,
+        quantity: item.quantity || 1,
+        specifications: item.specifications || {},
+      }));
+
+    if (validItems.length === 0) {
+      toast.error("В шаблоне нет корректных услуг");
+      return;
+    }
+
+    reset({
+      items: validItems,
+      notes: template.notes || "",
+      deadline: "",
+      priority: "normal",
+    });
+    setSelectedTemplateId(String(template.id));
+    setStep(1);
+    toast.success(`Шаблон «${template.name}» применён`);
+  };
+
+  // Загрузка данных из localStorage (из калькулятора) или шаблона
   useEffect(() => {
+    const templateFromNav = (location.state as { template?: OrderTemplate } | null)?.template;
+    if (templateFromNav) {
+      applyTemplateToForm(templateFromNav);
+      navigate(location.pathname, { replace: true, state: {} });
+      return;
+    }
+
     const pendingOrder = localStorage.getItem("pending_order");
     if (pendingOrder) {
       try {
@@ -105,7 +151,14 @@ export const ClientNewOrder = () => {
         showApiError(e, "Ошибка загрузки данных из калькулятора");
       }
     }
-  }, [reset]);
+  }, [reset, navigate, location.pathname, location.state]);
+
+  const { data: templatesData } = useQuery({
+    queryKey: ["client-templates"],
+    queryFn: () => getTemplates({ page: 1, limit: 100 }),
+  });
+
+  const templates = templatesData?.items || [];
 
   const { data: categoriesData } = useQuery({
     queryKey: ["service-categories"],
@@ -128,6 +181,15 @@ export const ClientNewOrder = () => {
 
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const items = watch("items");
+  const validItemCount = items.filter((item) => item.service_id > 0).length;
+
+  const ensureItemsSelected = async () => {
+    const isValid = await trigger("items");
+    if (!isValid) {
+      toast.error(EMPTY_ORDER_MESSAGE);
+    }
+    return isValid;
+  };
 
   // Расчёт стоимости при изменении items
   useQuery({
@@ -197,7 +259,8 @@ export const ClientNewOrder = () => {
     };
 
     if (validData.items.length === 0) {
-      toast.error("Добавьте хотя бы одну услугу");
+      toast.error(EMPTY_ORDER_MESSAGE);
+      setStep(1);
       return;
     }
 
@@ -230,6 +293,31 @@ export const ClientNewOrder = () => {
               <CardDescription>Добавьте услуги в заказ</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {templates.length > 0 && (
+                <div>
+                  <Label htmlFor="order-template">Шаблон заказа</Label>
+                  <select
+                    id="order-template"
+                    value={selectedTemplateId}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setSelectedTemplateId(value);
+                      if (!value) return;
+                      const template = templates.find((item) => String(item.id) === value);
+                      if (template) applyTemplateToForm(template);
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">Без шаблона</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={String(template.id)}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {fields.map((field, index) => (
                 <div key={field.id} className="flex items-end gap-4 p-4 border rounded-lg">
                   <div className="flex-1">
@@ -274,6 +362,16 @@ export const ClientNewOrder = () => {
                 <Plus className="mr-2 h-4 w-4" /> Добавить услугу
               </Button>
 
+              {errors.items?.message && (
+                <p className="text-sm text-destructive">{String(errors.items.message)}</p>
+              )}
+
+              {!errors.items?.message && validItemCount === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Заказ пока пуст — выберите услугу из списка.
+                </p>
+              )}
+
               {finalPrice > 0 && (
                 <div className="p-4 bg-muted rounded-lg">
                   <OrderDiscountSummary
@@ -291,7 +389,14 @@ export const ClientNewOrder = () => {
               )}
 
               <div className="flex justify-end">
-                <Button type="button" onClick={() => setStep(2)}>
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    if (await ensureItemsSelected()) {
+                      setStep(2);
+                    }
+                  }}
+                >
                   Далее <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -329,7 +434,14 @@ export const ClientNewOrder = () => {
                 <Button type="button" variant="outline" onClick={() => setStep(1)}>
                   <ChevronLeft className="mr-2 h-4 w-4" /> Назад
                 </Button>
-                <Button type="button" onClick={() => setStep(3)}>
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    if (await ensureItemsSelected()) {
+                      setStep(3);
+                    }
+                  }}
+                >
                   Далее <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -345,16 +457,22 @@ export const ClientNewOrder = () => {
             <CardContent className="space-y-4">
               <div className="p-4 bg-muted rounded-lg">
                 <h4 className="font-semibold mb-2">Состав заказа:</h4>
-                <ul className="space-y-1 text-sm">
-                  {items.filter((i) => i.service_id > 0).map((item, idx) => {
-                    const svc = services.find((s) => s.id === item.service_id);
-                    return (
-                      <li key={idx} className="flex justify-between">
-                        <span>{svc?.name || "Услуга"} × {item.quantity}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
+                {validItemCount === 0 ? (
+                  <p className="text-sm text-destructive">
+                    Заказ пуст. Вернитесь на предыдущий шаг и добавьте услуги.
+                  </p>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {items.filter((i) => i.service_id > 0).map((item, idx) => {
+                      const svc = services.find((s) => s.id === item.service_id);
+                      return (
+                        <li key={idx} className="flex justify-between">
+                          <span>{svc?.name || "Услуга"} × {item.quantity}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
               {finalPrice > 0 && (
                 <OrderDiscountSummary
@@ -373,7 +491,7 @@ export const ClientNewOrder = () => {
                 <Button type="button" variant="outline" onClick={() => setStep(2)}>
                   <ChevronLeft className="mr-2 h-4 w-4" /> Назад
                 </Button>
-                <Button type="submit" disabled={createMutation.isPending}>
+                <Button type="submit" disabled={createMutation.isPending || validItemCount === 0}>
                   {createMutation.isPending ? "Создание..." : "Оформить заказ"}
                 </Button>
               </div>

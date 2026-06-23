@@ -97,6 +97,7 @@ export interface OrderItem {
   id: number
   order_id?: string
   service_id: number
+  service_name?: string
   service?: Service
   quantity: number
   unit_price: number
@@ -171,10 +172,13 @@ export interface Material {
 export interface MaterialRequest {
   id: number
   technician_id: number
+  technician_name?: string
   technician?: Technician
   material_id: number
+  material_name?: string
   material?: Material
   quantity_requested: number
+  quantity_available?: number
   status: MaterialRequestStatus
   comment?: string
   created_at: string
