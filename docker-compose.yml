@@ -33,6 +33,7 @@ services:
     environment:
       SQLALCHEMY_DATABASE_URL: postgresql+psycopg://postgres:postgres123@db:5432/dental_lab
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000,http://localhost}
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
       UPLOAD_DIR: /app/uploads

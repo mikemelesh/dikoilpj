@@ -9,6 +9,7 @@ from decimal import Decimal
 from dotenv import load_dotenv
 import uuid
 import sys
+import os
 
 # Чтобы вывод с emoji не падал из-за кодировки консоли Windows (cp1251)
 try:
@@ -299,8 +300,11 @@ def create_orders(db: Session, clients: dict, technicians: dict, services: dict,
                 order_created_at = base_time - timedelta(minutes=order_counter * 10)
             order_counter += 1
 
-            # Генерация номера заказа
-            order_number = f"ORD-{order_created_at.strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+            # Генерация номера заказа (counter + 8 hex — избегаем коллизий 4-символьного суффикса)
+            order_number = (
+                f"ORD-{order_created_at.strftime('%Y%m%d')}-"
+                f"{order_counter:04d}-{uuid.uuid4().hex[:8].upper()}"
+            )
 
             # Расчет даты дедлайна
             deadline = order_created_at + timedelta(days=order_config["deadline_days"]) if order_config["deadline_days"] > 0 else None
@@ -760,6 +764,17 @@ def create_order_templates(db: Session, clients: dict, services: dict) -> list:
 
 def run_seed():
     """Запуск заполнения БД."""
+    force = os.getenv("FORCE_SEED", "").lower() in ("1", "true", "yes")
+
+    db = SessionLocal()
+    try:
+        admin = db.query(User).filter(User.email == "admin@dental-lab.ru").first()
+        if admin and not force:
+            print("ℹ️  Seed пропущен: в базе уже есть данные (FORCE_SEED=1 — пересоздать)")
+            return
+    finally:
+        db.close()
+
     print("=" * 60)
     print("Запуск заполнения базы данных (индивидуальное распределение)...")
     print("=" * 60)

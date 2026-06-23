@@ -26,10 +26,14 @@ class Settings:
     # Templates (legacy server-rendered pages; can be removed after React migration)
     TEMPLATES_DIR: Path = BASE_DIR.parent / "templates"
 
-    # CORS
+    # CORS (comma-separated origins in CORS_ORIGINS env)
     CORS_ORIGINS: list[str] = [
-        "http://localhost:5173",
-        "http://localhost:3000",
+        origin.strip()
+        for origin in os.getenv(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://localhost:3000",
+        ).split(",")
+        if origin.strip()
     ]
 
     @property
